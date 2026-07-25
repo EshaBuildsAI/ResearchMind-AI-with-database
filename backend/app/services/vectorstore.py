@@ -74,12 +74,26 @@ def add_document(user_id: str, doc_id: str, filename: str, text: str, pages: lis
     return len(all_chunks)
 
 
-def query(user_id: str, query_text: str, doc_id: str = None, n_results: int = None) -> list:
-    """Retrieve relevant chunk texts, always scoped to user_id."""
+def _build_where(user_id: str, doc_id) -> dict:
+    """doc_id can be None (search all of the user's docs), a single doc_id
+    string, or a list of doc_ids (multi-document context)."""
+    if not doc_id:
+        return {"user_id": user_id}
+    if isinstance(doc_id, (list, tuple, set)):
+        doc_ids = list(doc_id)
+        if len(doc_ids) == 1:
+            return {"$and": [{"doc_id": doc_ids[0]}, {"user_id": user_id}]}
+        return {"$and": [{"doc_id": {"$in": doc_ids}}, {"user_id": user_id}]}
+    return {"$and": [{"doc_id": doc_id}, {"user_id": user_id}]}
+
+
+def query(user_id: str, query_text: str, doc_id=None, n_results: int = None) -> list:
+    """Retrieve relevant chunk texts, always scoped to user_id. doc_id may be
+    a single id, a list of ids (multi-document context), or None (all docs)."""
     collection = _get_collection()
     n_results = n_results or settings.TOP_K_RESULTS
 
-    where = {"user_id": user_id} if not doc_id else {"$and": [{"doc_id": doc_id}, {"user_id": user_id}]}
+    where = _build_where(user_id, doc_id)
     results = collection.query(query_texts=[query_text], n_results=n_results, where=where)
 
     if not results["documents"]:
@@ -87,14 +101,16 @@ def query(user_id: str, query_text: str, doc_id: str = None, n_results: int = No
     return results["documents"][0]
 
 
-def query_with_metadata(user_id: str, query_text: str, doc_id: str = None, n_results: int = None) -> list:
-    """Like query(), but returns page number + an approximate confidence score
-    (derived from vector distance — a similarity signal, not a calibrated
-    probability). Used by the Citation Agent."""
+def query_with_metadata(user_id: str, query_text: str, doc_id=None, n_results: int = None) -> list:
+    """Like query(), but returns page number + filename + an approximate
+    confidence score (derived from vector distance — a similarity signal,
+    not a calibrated probability, unless reranker_service.rerank() is
+    applied afterward). Used by the Citation Agent. doc_id may be a single
+    id, a list of ids (multi-document context), or None (all docs)."""
     collection = _get_collection()
     n_results = n_results or settings.TOP_K_RESULTS
 
-    where = {"user_id": user_id} if not doc_id else {"$and": [{"doc_id": doc_id}, {"user_id": user_id}]}
+    where = _build_where(user_id, doc_id)
     results = collection.query(
         query_texts=[query_text], n_results=n_results, where=where,
         include=["documents", "metadatas", "distances"],
@@ -107,7 +123,11 @@ def query_with_metadata(user_id: str, query_text: str, doc_id: str = None, n_res
     output = []
     for text, meta, distance in zip(chunks, metadatas, distances):
         confidence = max(0.0, min(1.0, 1 - distance)) * 100
-        output.append({"text": text, "page": meta.get("page") or None, "confidence": round(confidence, 1)})
+        output.append({
+            "text": text, "page": meta.get("page") or None,
+            "confidence": round(confidence, 1),
+            "doc_id": meta.get("doc_id"), "filename": meta.get("filename"),
+        })
     return output
 
 
@@ -118,6 +138,22 @@ def get_full_document_text(user_id: str, doc_id: str) -> str:
         return ""
     paired = sorted(zip(results["metadatas"], results["documents"]), key=lambda p: p[0]["chunk_index"])
     return " ".join(chunk for _, chunk in paired)
+
+
+def get_full_documents_text(user_id: str, doc_ids: list) -> str:
+    """Multi-document context: concatenates full text of several documents,
+    each labeled by filename so the LLM can attribute claims correctly."""
+    parts = []
+    collection = _get_collection()
+    for doc_id in doc_ids:
+        results = collection.get(where={"$and": [{"doc_id": doc_id}, {"user_id": user_id}]})
+        if not results["documents"]:
+            continue
+        paired = sorted(zip(results["metadatas"], results["documents"]), key=lambda p: p[0]["chunk_index"])
+        filename = paired[0][0].get("filename", doc_id) if paired else doc_id
+        text = " ".join(chunk for _, chunk in paired)
+        parts.append(f"[Document: {filename}]\n{text}")
+    return "\n\n".join(parts)
 
 
 def delete_document(user_id: str, doc_id: str):

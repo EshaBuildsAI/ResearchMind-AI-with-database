@@ -5,6 +5,7 @@ just moved here. Plus JWT create/verify for stateless session auth
 (React stores the token, sends it on every request via Authorization header).
 """
 
+import secrets
 from datetime import datetime, timedelta
 
 import bcrypt
@@ -33,7 +34,22 @@ def create_refresh_token(user_id: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
+def create_pending_2fa_token(user_id: str) -> str:
+    """Short-lived (5 min) token issued after password check succeeds but
+    before the TOTP code is verified — proves "I know the password" without
+    granting a real session yet."""
+    expire = datetime.utcnow() + timedelta(minutes=5)
+    payload = {"sub": user_id, "exp": expire, "type": "pending_2fa"}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
 def decode_token(token: str) -> dict:
     """Raises JWTError if invalid/expired — caller (get_current_user) turns
     that into a 401."""
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+
+
+def generate_secure_token() -> str:
+    """Used for email verification and password reset links — long, random,
+    URL-safe, unguessable."""
+    return secrets.token_urlsafe(32)

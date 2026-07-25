@@ -43,3 +43,13 @@ python-docx==1.1.2
 python-pptx==0.6.23
 pandas==2.2.2
 openpyxl==3.1.4
+
+# ---------------- Two-factor auth (free, no SMS provider) ----------------
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+
+# ---------------- Billing (Stripe — free to integrate, test mode is free) ----------------
+stripe==9.12.0
+
+# ---------------- Semantic re-ranking (free, local — better confidence scores) ----------------
+sentence-transformers==3.0.1

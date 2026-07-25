@@ -41,6 +41,10 @@ class UserOut(BaseModel):
     id: str
     username: str
     email: str
+    email_verified: bool = False
+    is_admin: bool = False
+    plan: str = "free"
+    totp_enabled: bool = False
 
     class Config:
         from_attributes = True
@@ -53,12 +57,70 @@ class TokenResponse(BaseModel):
     user: UserOut
 
 
+class LoginResultResponse(BaseModel):
+    """Returned by /auth/login. If the account has 2FA enabled, tokens are
+    withheld and a short-lived pending_token is returned instead — the
+    frontend must call /auth/login/2fa with it + a TOTP code to finish."""
+    requires_2fa: bool = False
+    pending_token: str | None = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    user: UserOut | None = None
+
+
 class MessageResponse(BaseModel):
     message: str
 
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+# ---------------- Email verification / password reset ----------------
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_valid(cls, v):
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters.")
+        return v
+
+
+# ---------------- Two-factor authentication ----------------
+
+class Enable2FAResponse(BaseModel):
+    secret: str
+    qr_code_base64: str
+
+
+class Confirm2FARequest(BaseModel):
+    code: str
+
+
+class Login2FARequest(BaseModel):
+    pending_token: str
+    code: str
+
+
+class Disable2FARequest(BaseModel):
+    code: str
 
 
 # ---------------- Documents ----------------
@@ -81,6 +143,7 @@ class DocumentOut(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     document_id: str | None = None
+    document_ids: list[str] | None = None  # multi-document context; if set, takes priority over document_id
 
 
 class SourceChunk(BaseModel):
@@ -110,6 +173,7 @@ class ChatMessageOut(BaseModel):
 class AgentRequest(BaseModel):
     question: str = ""
     document_id: str | None = None
+    document_ids: list[str] | None = None  # multi-document context; if set, takes priority over document_id
 
 
 class SummarizeReferenceRequest(BaseModel):
@@ -136,6 +200,7 @@ class AgentRunOut(BaseModel):
     error_message: str | None = None
     steps: list[AgentStepOut] = []
     created_at: str
+    document_ids: list[str] = []
 
 
 # ---------------- AI Features ----------------
@@ -175,3 +240,51 @@ class SmartMemoryOut(BaseModel):
 
 class TTSRequest(BaseModel):
     text: str
+
+
+# ---------------- Usage / plan ----------------
+
+class UsageBucketOut(BaseModel):
+    used: int
+    limit: int | None = None
+
+
+class UsageSummaryOut(BaseModel):
+    plan: str
+    documents: UsageBucketOut
+    chat_today: UsageBucketOut
+    agent_today: UsageBucketOut
+
+
+# ---------------- Billing (Stripe) ----------------
+
+class CheckoutSessionOut(BaseModel):
+    checkout_url: str
+
+
+class BillingPortalOut(BaseModel):
+    portal_url: str
+
+
+# ---------------- Admin ----------------
+
+class AdminUserOut(BaseModel):
+    id: str
+    username: str
+    email: str
+    plan: str
+    is_admin: bool
+    email_verified: bool
+    document_count: int
+    created_at: str
+
+
+class AdminStatsOut(BaseModel):
+    total_users: int
+    total_documents: int
+    total_chat_messages: int
+    total_agent_runs: int
+    users_by_plan: dict
+    agent_runs_by_type: dict
+    feature_usage: dict
+    signups_last_7_days: dict

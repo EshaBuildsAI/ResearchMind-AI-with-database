@@ -9,7 +9,8 @@ import logging
 import os
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -72,6 +73,9 @@ def upload_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    from app.services import usage_service
+    usage_service.enforce_document_limit(db, current_user)
+
     extension = get_file_extension(file.filename)
     if extension not in settings.SUPPORTED_FORMATS:
         raise HTTPException(400, f"Unsupported file type '.{extension}'. "
@@ -118,6 +122,48 @@ def get_document(document_id: str, current_user: User = Depends(get_current_user
     if not document:
         raise HTTPException(404, "Document not found.")
     return _serialize(document)
+
+
+@router.get("/{document_id}/file")
+def get_document_file(
+    document_id: str,
+    request: Request,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Serves the original uploaded file — used by the Citation Agent's
+    'View source' button to open the document in a new tab. A plain link
+    opened in a new tab can't send an Authorization header, so this route
+    also accepts the access token as a `?token=` query param (same pattern
+    as the WebSocket auth in routers/ws.py) alongside the normal header."""
+    from app.core.deps import get_user_from_token_string
+
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = auth_header[7:] if auth_header.startswith("Bearer ") else token
+    current_user = get_user_from_token_string(bearer_token, db) if bearer_token else None
+    if not current_user:
+        raise HTTPException(401, "Authentication required.")
+
+    document = db.query(Document).filter(
+        Document.id == document_id, Document.user_id == current_user.id
+    ).first()
+    if not document:
+        raise HTTPException(404, "Document not found.")
+    if not os.path.exists(document.storage_path):
+        raise HTTPException(404, "The original file is no longer available on disk.")
+
+    media_types = {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "txt": "text/plain",
+    }
+    return FileResponse(
+        document.storage_path,
+        media_type=media_types.get(document.file_type, "application/octet-stream"),
+        filename=document.filename,
+    )
 
 
 @router.delete("/{document_id}")

@@ -7,6 +7,14 @@ import {
 import { useAgentPanel } from '../context/AgentPanelContext'
 import { useDocuments } from '../context/DocumentsContext'
 import { useState } from 'react'
+import { getAccessToken } from '../api/client'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+function viewSourceUrl(docId) {
+  const token = getAccessToken()
+  return `${API_BASE_URL}/documents/${docId}/file?token=${encodeURIComponent(token || '')}`
+}
 
 const AGENT_META = {
   research: { label: 'Research Agent', icon: Telescope },
@@ -85,6 +93,16 @@ function StepDetail({ step, onSummarize }) {
               {c.confidence != null && <span className="text-[10px] text-ink-faint">{c.confidence}% match</span>}
             </div>
             <p className="line-clamp-2 text-[11px] text-ink-muted">{c.text}</p>
+            {c.doc_id && (
+              <a
+                href={viewSourceUrl(c.doc_id)}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-teal-bright hover:underline"
+              >
+                <ExternalLink size={11} /> View source{c.filename ? ` (${c.filename})` : ''}
+              </a>
+            )}
           </div>
         ))}
       </div>

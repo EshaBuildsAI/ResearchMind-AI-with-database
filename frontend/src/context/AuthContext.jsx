@@ -23,6 +23,16 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (identifier, password) => {
     const { data } = await authApi.login({ identifier, password })
+    if (data.requires_2fa) {
+      return { requiresTwoFactor: true, pendingToken: data.pending_token }
+    }
+    setTokens(data)
+    setUser(data.user)
+    return { requiresTwoFactor: false, user: data.user }
+  }, [])
+
+  const completeLogin2fa = useCallback(async (pendingToken, code) => {
+    const { data } = await authApi.login2fa(pendingToken, code)
     setTokens(data)
     setUser(data.user)
     return data.user
@@ -43,7 +53,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{ user, loading, login, completeLogin2fa, register, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   )

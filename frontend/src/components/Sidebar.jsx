@@ -1,8 +1,10 @@
 import {
   LayoutGrid, MessageSquare, FileStack, Compass, Telescope, ListChecks,
   Clock, Lightbulb, Quote, FileText, HelpCircle, Layers, BookOpen,
-  SearchCode, Presentation, GraduationCap, Mic, BrainCircuit,
+  SearchCode, Presentation, GraduationCap, Mic, BrainCircuit, History,
+  Settings, CreditCard, ShieldCheck,
 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const ICON_SIZE = 17
 const ICON_STROKE = 1.75
@@ -11,6 +13,7 @@ const NAV_MAIN = [
   { id: 'workspace', label: 'Workspace', icon: LayoutGrid },
   { id: 'documents', label: 'Documents', icon: FileStack },
   { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'history', label: 'Agent History', icon: History },
 ]
 
 const NAV_AGENTS = [
@@ -31,6 +34,11 @@ const NAV_TOOLS = [
   { id: 'tool-presentation', label: 'Presentation Studio', icon: Presentation },
   { id: 'tool-proposal', label: 'Proposal Generator', icon: GraduationCap },
   { id: 'tool-voice', label: 'Voice Assistant', icon: Mic },
+]
+
+const NAV_ACCOUNT = [
+  { id: 'billing', label: 'Usage & Billing', icon: CreditCard },
+  { id: 'settings', label: 'Security Settings', icon: Settings },
 ]
 
 function NavItem({ item, active, onClick }) {
@@ -59,6 +67,8 @@ function SectionLabel({ children }) {
 }
 
 export default function Sidebar({ activeView, onNavigate }) {
+  const { user } = useAuth()
+
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-surface-border bg-surface/40 backdrop-blur-md md:flex">
       <div className="flex items-center gap-2 px-4 py-5">
@@ -82,9 +92,21 @@ export default function Sidebar({ activeView, onNavigate }) {
         {NAV_TOOLS.map((item) => (
           <NavItem key={item.id} item={item} active={activeView === item.id} onClick={() => onNavigate(item.id)} />
         ))}
+
+        <SectionLabel>Account</SectionLabel>
+        {NAV_ACCOUNT.map((item) => (
+          <NavItem key={item.id} item={item} active={activeView === item.id} onClick={() => onNavigate(item.id)} />
+        ))}
+        {user?.is_admin && (
+          <NavItem
+            item={{ id: 'admin', label: 'Admin Dashboard', icon: ShieldCheck }}
+            active={activeView === 'admin'}
+            onClick={() => onNavigate('admin')}
+          />
+        )}
       </nav>
     </aside>
   )
 }
 
-export { NAV_MAIN, NAV_AGENTS, NAV_TOOLS }
+export { NAV_MAIN, NAV_AGENTS, NAV_TOOLS, NAV_ACCOUNT }
