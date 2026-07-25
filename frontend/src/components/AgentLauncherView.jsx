@@ -1,0 +1,169 @@
+import { useState } from 'react'
+import { Sparkles, AlertCircle, FileText, ChevronDown } from 'lucide-react'
+import { useAgentPanel } from '../context/AgentPanelContext'
+import { useDocuments } from '../context/DocumentsContext'
+
+const AGENT_INFO = {
+  planner: {
+    title: 'Planner Agent',
+    desc: 'Ask anything — the planner classifies your intent and routes to the right tool (recommendations, timeline, gaps, citations, or general chat) automatically.',
+    placeholder: 'e.g. "What should I read next on this topic?" — or leave blank and just pick a document',
+    requiresDoc: false,
+  },
+  research: {
+    title: 'Research Agent',
+    desc: 'Combines your document (if any) with live arXiv + Semantic Scholar search to produce a real, substantive answer — reference links come last, not first.',
+    placeholder: 'e.g. "How does this compare to recent transformer research?" — works with just a topic too',
+    requiresDoc: false,
+  },
+  citation: {
+    title: 'Citation Agent',
+    desc: 'Answers your question with real page numbers and a similarity confidence score. This one genuinely needs a document — page numbers don\'t exist without one.',
+    placeholder: 'e.g. "What does the document say about limitations?"',
+    requiresDoc: true,
+  },
+  recommendation: {
+    title: 'Recommendation Agent',
+    desc: 'Searches Semantic Scholar and recommends papers/techniques worth exploring next.',
+    placeholder: 'e.g. "transformer efficiency techniques" — or select a document and leave this blank',
+    requiresDoc: false,
+  },
+  timeline: {
+    title: 'Timeline Agent',
+    desc: 'Builds a chronological timeline of how a topic evolved, based on dated papers found online.',
+    placeholder: 'e.g. "attention mechanisms in NLP" — or select a document and leave this blank',
+    requiresDoc: false,
+  },
+  innovation: {
+    title: 'Innovation Agent',
+    desc: 'Combines research gaps with recent trends to suggest novel, specific project ideas.',
+    placeholder: 'e.g. "low-resource language modeling" — or select a document and leave this blank',
+    requiresDoc: false,
+  },
+}
+
+export default function AgentLauncherView({ agentType }) {
+  const info = AGENT_INFO[agentType]
+  const { runAgent } = useAgentPanel()
+  const { documents, selectedId, setSelectedId } = useDocuments()
+  const [question, setQuestion] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [docPickerOpen, setDocPickerOpen] = useState(false)
+
+  const selectedDoc = documents.find((d) => d.id === selectedId) || null
+  const readyDocs = documents.filter((d) => d.status === 'ready')
+
+  async function handleRun(e) {
+    e.preventDefault()
+    if (!question.trim() && !selectedId) {
+      setError('Enter a topic/question, select a document, or both.')
+      return
+    }
+    if (info.requiresDoc && !selectedId) {
+      setError('This agent needs a document — select one below.')
+      return
+    }
+    setError('')
+    setSubmitting(true)
+    try {
+      await runAgent(agentType, question.trim(), selectedId || null)
+      setQuestion('')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'The agent run failed.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-xl">
+      <div className="glass-card p-6">
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-teal/10">
+          <Sparkles size={20} className="text-teal-bright" strokeWidth={1.75} />
+        </div>
+        <h1 className="font-display text-lg font-semibold text-ink">{info.title}</h1>
+        <p className="mt-1.5 text-sm text-ink-muted">{info.desc}</p>
+
+        <form onSubmit={handleRun} className="mt-5 space-y-3">
+          {/* Document selector — always visible, independent of the topic field */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-muted">
+              Document {info.requiresDoc ? '(required)' : '(optional)'}
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDocPickerOpen((v) => !v)}
+                className="input-field flex items-center justify-between text-left"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <FileText size={14} className="shrink-0 text-ink-faint" />
+                  {selectedDoc ? selectedDoc.filename : 'No document selected'}
+                </span>
+                <ChevronDown size={14} className="shrink-0 text-ink-faint" />
+              </button>
+              {docPickerOpen && (
+                <div className="glass-card absolute left-0 top-full z-10 mt-1.5 max-h-56 w-full overflow-y-auto p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(null)
+                      setDocPickerOpen(false)
+                    }}
+                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-xs text-ink-muted hover:bg-surface-light hover:text-ink"
+                  >
+                    None — use topic text only
+                  </button>
+                  {readyDocs.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
+                  )}
+                  {readyDocs.map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(doc.id)
+                        setDocPickerOpen(false)
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${
+                        doc.id === selectedId ? 'bg-teal/10 text-teal-bright' : 'text-ink-muted hover:bg-surface-light hover:text-ink'
+                      }`}
+                    >
+                      <FileText size={13} className="shrink-0" />
+                      <span className="truncate">{doc.filename}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Topic / question text — always visible, independent of the document */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-muted">
+              Topic or question {info.requiresDoc ? '' : '(optional if a document is selected)'}
+            </label>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder={info.placeholder}
+              rows={3}
+              className="input-field resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-xs text-coral-glow">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          <button type="submit" disabled={submitting} className="btn-primary w-full">
+            {submitting ? 'Running agent...' : 'Run agent'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}

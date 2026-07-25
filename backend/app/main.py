@@ -1,0 +1,82 @@
+"""
+app/main.py
+Entry point. Run with:
+    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+Production (multiple workers — this is what fixes the single-threaded
+Streamlit hang):
+    uvicorn app.main:app --workers 4 --host 0.0.0.0 --port 8000
+"""
+
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.core.config import settings
+from app.core.database import Base, engine
+from app.routers import auth, documents, query, agents, features, voice
+
+# ---------------- Logging ----------------
+# Structured-enough for now (JSON formatter can be swapped in later without
+# touching any call site — every log call already goes through this logger).
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time": "%(asctime)s", "level": "%(levelname)s", '
+           '"logger": "%(name)s", "message": "%(message)s"}',
+)
+logger = logging.getLogger("researchmind")
+
+# ---------------- Tables ----------------
+# For production, replace this with Alembic migrations. Fine for now to
+# get the API running against a fresh Postgres/SQLite instance.
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="ResearchMind AI — production backend",
+    version="1.0.0",
+)
+
+# ---------------- CORS ----------------
+# Only the React frontend's real origin(s) are allowed — everything else
+# is blocked by default.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.FRONTEND_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------- Global error handler ----------------
+# Catches anything a route didn't explicitly handle so the user always
+# gets a clean JSON error instead of a blank page / raw traceback.
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Something went wrong on our end. Please try again."},
+    )
+
+
+# ---------------- Routers ----------------
+app.include_router(auth.router)
+app.include_router(documents.router)
+app.include_router(query.router)
+app.include_router(agents.router)
+app.include_router(features.router)
+app.include_router(voice.router)
+
+
+# ---------------- Health check ----------------
+@app.get("/health", tags=["system"])
+def health_check():
+    return {"status": "ok", "env": settings.ENV}
+
+
+@app.get("/", tags=["system"])
+def root():
+    return {"message": f"{settings.APP_NAME} API is running."}

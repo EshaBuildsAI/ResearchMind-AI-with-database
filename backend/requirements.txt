@@ -1,0 +1,45 @@
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+python-jose[cryptography]==3.3.0
+bcrypt==4.1.3
+pydantic[email]==2.7.1
+python-dotenv==1.0.1
+python-multipart==0.0.9
+
+# ---------------- AI (only paid piece: GPT-4o-mini) ----------------
+# >=1.40 required: older 1.35.3 breaks on newer httpx with
+# "Client.__init__() got an unexpected keyword argument 'proxies'"
+# (found + fixed during real-machine testing).
+openai>=1.40,<2.0
+
+# ---------------- Agent orchestration ----------------
+# Loose versions on purpose: the pinned 0.1.5/0.2.9 pair broke on a fresh
+# install because langgraph's auto-installed sub-packages (langgraph-checkpoint,
+# langgraph-prebuilt, langgraph-sdk) had moved ahead and no longer matched —
+# "Reviver.__init__() got an unexpected keyword argument 'allowed_objects'".
+# Letting pip resolve current compatible versions avoids that drift.
+langgraph>=0.2
+langchain-core>=0.3
+
+# ---------------- Vector store + free local embeddings ----------------
+# numpy<2 pinned deliberately: chromadb 0.5.0's embedding_functions module
+# uses np.float_ which was removed in NumPy 2.0 — without this pin the
+# backend fails to even import (found + fixed during testing).
+numpy<2.0
+chromadb==0.5.0
+
+# ---------------- Free research APIs + link summarization ----------------
+requests==2.32.3
+beautifulsoup4==4.12.3
+
+# ---------------- Document text extraction ----------------
+# Unpinned on purpose: the pinned 1.24.5 hit "DLL load failed while
+# importing _extra" on Windows; a fresh install of the latest build
+# resolved it (found + fixed during real-machine testing).
+PyMuPDF
+python-docx==1.1.2
+python-pptx==0.6.23
+pandas==2.2.2
+openpyxl==3.1.4

@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-surface-border;
+  }
+  body {
+    background:
+      radial-gradient(ellipse 80% 50% at 15% -10%, rgba(20, 184, 166, 0.12), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 10%, rgba(255, 111, 94, 0.08), transparent),
+      #070f0f;
+    min-height: 100vh;
+  }
+  ::selection {
+    background: rgba(20, 184, 166, 0.35);
+  }
+  :focus-visible {
+    outline: 2px solid theme('colors.teal.bright');
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1c3532;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #24413d;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-surface/70 backdrop-blur-md border border-surface-border;
+  }
+  .glass-card {
+    @apply glass rounded-2xl shadow-card;
+  }
+  .icon-btn {
+    @apply flex items-center justify-center rounded-lg text-ink-muted hover:text-ink hover:bg-surface-light transition-colors;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-teal text-void font-display font-semibold
+           px-4 py-2.5 text-sm hover:bg-teal-bright transition-all shadow-glow hover:shadow-none
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl glass text-ink font-medium
+           px-4 py-2.5 text-sm hover:border-teal/50 hover:bg-surface-light transition-all
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .input-field {
+    @apply w-full rounded-xl bg-surface border border-surface-border px-4 py-2.5 text-sm text-ink
+           placeholder:text-ink-faint focus:border-teal/60 focus:outline-none transition-colors;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border;
+  }
+}
