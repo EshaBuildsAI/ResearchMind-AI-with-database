@@ -83,5 +83,40 @@ class Settings:
     CHAT_RATE_LIMIT_PER_MINUTE = int(os.getenv("CHAT_RATE_LIMIT_PER_MINUTE", "10"))
     AGENT_RATE_LIMIT_PER_MINUTE = int(os.getenv("AGENT_RATE_LIMIT_PER_MINUTE", "5"))
 
+    # ---------------- Frontend URL (for email links) ----------------
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    # ---------------- Email (SMTP — free via your own Gmail/Outlook account,
+    # no third-party paid email API required). If left blank, verification/
+    # reset emails are logged to the console instead of actually sent, so
+    # local dev still works with zero setup. ----------------
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "noreply@researchmind.ai")
+    SMTP_FROM_NAME = "ResearchMind AI"
+
+    # ---------------- Two-factor auth (TOTP — free, no SMS provider) ----------------
+    TOTP_ISSUER = "ResearchMind AI"
+
+    # ---------------- Admin bootstrap ----------------
+    # Comma-separated usernames to auto-promote to admin on first login
+    # after this env var is set — convenient for the very first admin account.
+    ADMIN_USERNAMES = [u.strip() for u in os.getenv("ADMIN_USERNAMES", "").split(",") if u.strip()]
+
+    # ---------------- Plan limits (free vs pro) — all enforced server-side ----------------
+    FREE_PLAN_MAX_DOCUMENTS = int(os.getenv("FREE_PLAN_MAX_DOCUMENTS", "5"))
+    FREE_PLAN_CHAT_PER_DAY = int(os.getenv("FREE_PLAN_CHAT_PER_DAY", "30"))
+    FREE_PLAN_AGENT_PER_DAY = int(os.getenv("FREE_PLAN_AGENT_PER_DAY", "15"))
+    PRO_PLAN_MAX_DOCUMENTS = int(os.getenv("PRO_PLAN_MAX_DOCUMENTS", "200"))
+    PRO_PLAN_CHAT_PER_DAY = int(os.getenv("PRO_PLAN_CHAT_PER_DAY", "1000"))
+    PRO_PLAN_AGENT_PER_DAY = int(os.getenv("PRO_PLAN_AGENT_PER_DAY", "500"))
+
+    # ---------------- Stripe (test mode is entirely free — only real charges cost money) ----------------
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_PRICE_ID_PRO = os.getenv("STRIPE_PRICE_ID_PRO", "")
+
 
 settings = Settings()

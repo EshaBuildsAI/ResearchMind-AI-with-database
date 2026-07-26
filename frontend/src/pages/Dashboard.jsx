@@ -8,6 +8,10 @@ import ChatWindow from '../components/ChatWindow'
 import AgentLauncherView from '../components/AgentLauncherView'
 import FeatureView from '../components/FeatureView'
 import VoiceView from '../components/VoiceView'
+import AgentHistoryView from '../components/AgentHistoryView'
+import SettingsView from '../components/SettingsView'
+import BillingView from '../components/BillingView'
+import AdminView from '../components/AdminView'
 
 const AGENT_TYPE_MAP = {
   'agent-planner': 'planner',
@@ -25,6 +29,10 @@ export default function Dashboard() {
     if (activeView === 'workspace') return <WorkspaceGrid onNavigate={setActiveView} />
     if (activeView === 'documents') return <DocumentsView />
     if (activeView === 'chat') return <ChatWindow />
+    if (activeView === 'history') return <AgentHistoryView />
+    if (activeView === 'settings') return <SettingsView />
+    if (activeView === 'billing') return <BillingView />
+    if (activeView === 'admin') return <AdminView />
     if (activeView === 'tool-voice') return <VoiceView />
     if (AGENT_TYPE_MAP[activeView]) return <AgentLauncherView agentType={AGENT_TYPE_MAP[activeView]} />
     if (activeView.startsWith('tool-')) return <FeatureView toolId={activeView} />

@@ -1,16 +1,8 @@
-import { createContext, useContext, useState, useCallback } from 'react'
-import { agentsApi } from '../api'
+import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { agentsApi, WS_BASE_URL } from '../api'
+import { getAccessToken } from '../api/client'
 
 const AgentPanelContext = createContext(null)
-
-const AGENT_RUNNERS = {
-  research: agentsApi.research,
-  planner: agentsApi.planner,
-  recommendation: agentsApi.recommendation,
-  timeline: agentsApi.timeline,
-  innovation: agentsApi.innovation,
-  citation: agentsApi.citation,
-}
 
 export function AgentPanelProvider({ children }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -18,29 +10,77 @@ export function AgentPanelProvider({ children }) {
   const [currentRun, setCurrentRun] = useState(null)
   const [error, setError] = useState(null)
   const [history, setHistory] = useState([])
+  const wsRef = useRef(null)
 
-  const runAgent = useCallback(async (agentType, question, documentId) => {
-    const runner = AGENT_RUNNERS[agentType]
-    if (!runner) throw new Error(`Unknown agent type: ${agentType}`)
+  const closeSocket = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+  }, [])
 
+  /** Live-streaming run: kicks off the agent in the background, then opens a
+   * WebSocket to watch each step arrive in real time (instead of waiting for
+   * the whole run to finish before showing anything). */
+  const runAgent = useCallback(async (agentType, question, documentIds) => {
+    closeSocket()
     setIsOpen(true)
     setIsRunning(true)
     setError(null)
-    setCurrentRun({ agent_type: agentType, question, status: 'running', steps: [] })
+    setCurrentRun({ agent_type: agentType, question, status: 'running', steps: [], result_text: null, result: null })
 
     try {
-      const { data } = await runner(question, documentId)
-      setCurrentRun(data)
-      setHistory((prev) => [data, ...prev].slice(0, 20))
-      return data
+      const { data } = await agentsApi.startStreaming(agentType, question, documentIds)
+      const runId = data.run_id
+
+      return await new Promise((resolve, reject) => {
+        const token = getAccessToken()
+        const ws = new WebSocket(`${WS_BASE_URL}/ws/agents/${runId}?token=${encodeURIComponent(token || '')}`)
+        wsRef.current = ws
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data)
+          if (msg.type === 'ping') return
+
+          if (msg.type === 'step') {
+            setCurrentRun((prev) => {
+              if (!prev) return prev
+              const steps = [...(prev.steps || [])]
+              steps[msg.step_index] = {
+                step_index: msg.step_index, name: msg.name, label: msg.label,
+                status: msg.status, detail: msg.detail,
+              }
+              return { ...prev, steps }
+            })
+          } else if (msg.type === 'run_finished') {
+            setIsRunning(false)
+            setCurrentRun((prev) => {
+              const finished = {
+                ...prev, status: msg.status, result_text: msg.result_text, result: msg.result,
+                error_message: msg.error, id: runId,
+              }
+              setHistory((h) => [finished, ...h].slice(0, 20))
+              return finished
+            })
+            if (msg.status === 'failed') setError(msg.error || 'The agent run failed.')
+            ws.close()
+            resolve()
+          }
+        }
+
+        ws.onerror = () => {
+          setIsRunning(false)
+          setError('Lost connection to the agent stream.')
+          reject(new Error('WebSocket error'))
+        }
+      })
     } catch (err) {
+      setIsRunning(false)
       setError(err.response?.data?.detail || 'The agent run failed. Please try again.')
       setCurrentRun((prev) => (prev ? { ...prev, status: 'failed' } : prev))
       throw err
-    } finally {
-      setIsRunning(false)
     }
-  }, [])
+  }, [closeSocket])
 
   const summarizeReference = useCallback(async (url, question, documentId) => {
     setIsOpen(true)
@@ -62,12 +102,14 @@ export function AgentPanelProvider({ children }) {
   }, [])
 
   const reopenRun = useCallback((run) => {
+    closeSocket()
     setCurrentRun(run)
     setError(null)
     setIsOpen(true)
-  }, [])
+  }, [closeSocket])
 
   const deleteCurrentRun = useCallback(async () => {
+    closeSocket()
     if (currentRun?.id) {
       try {
         await agentsApi.deleteRun(currentRun.id)
@@ -79,7 +121,7 @@ export function AgentPanelProvider({ children }) {
     setCurrentRun(null)
     setError(null)
     setIsOpen(false)
-  }, [currentRun])
+  }, [currentRun, closeSocket])
 
   const closePanel = useCallback(() => setIsOpen(false), [])
 

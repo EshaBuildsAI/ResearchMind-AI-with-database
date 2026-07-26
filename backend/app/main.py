@@ -7,6 +7,7 @@ Streamlit hang):
     uvicorn app.main:app --workers 4 --host 0.0.0.0 --port 8000
 """
 
+import asyncio
 import logging
 
 from fastapi import FastAPI, Request
@@ -15,7 +16,8 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routers import auth, documents, query, agents, features, voice
+from app.routers import auth, documents, query, agents, features, voice, admin, billing, ws
+from app.services import broadcaster
 
 # ---------------- Logging ----------------
 # Structured-enough for now (JSON formatter can be swapped in later without
@@ -50,6 +52,15 @@ app.add_middleware(
 )
 
 
+# ---------------- Startup ----------------
+# Captures the real running event loop so broadcaster.publish() — called
+# from background worker threads during streaming agent runs — can
+# reliably deliver WebSocket updates instead of silently dropping them.
+@app.on_event("startup")
+async def _capture_main_event_loop():
+    broadcaster.set_main_loop(asyncio.get_running_loop())
+
+
 # ---------------- Global error handler ----------------
 # Catches anything a route didn't explicitly handle so the user always
 # gets a clean JSON error instead of a blank page / raw traceback.
@@ -69,6 +80,9 @@ app.include_router(query.router)
 app.include_router(agents.router)
 app.include_router(features.router)
 app.include_router(voice.router)
+app.include_router(admin.router)
+app.include_router(billing.router)
+app.include_router(ws.router)
 
 
 # ---------------- Health check ----------------

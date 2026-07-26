@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, AlertCircle, FileText, ChevronDown } from 'lucide-react'
+import { Sparkles, AlertCircle, FileText, ChevronDown, Check } from 'lucide-react'
 import { useAgentPanel } from '../context/AgentPanelContext'
 import { useDocuments } from '../context/DocumentsContext'
 
@@ -9,65 +9,81 @@ const AGENT_INFO = {
     desc: 'Ask anything — the planner classifies your intent and routes to the right tool (recommendations, timeline, gaps, citations, or general chat) automatically.',
     placeholder: 'e.g. "What should I read next on this topic?" — or leave blank and just pick a document',
     requiresDoc: false,
+    multiDoc: false,
   },
   research: {
     title: 'Research Agent',
-    desc: 'Combines your document (if any) with live arXiv + Semantic Scholar search to produce a real, substantive answer — reference links come last, not first.',
+    desc: 'Combines your document(s) — select more than one to compare — with live arXiv + Semantic Scholar search for a substantive answer, links last.',
     placeholder: 'e.g. "How does this compare to recent transformer research?" — works with just a topic too',
     requiresDoc: false,
+    multiDoc: true,
   },
   citation: {
     title: 'Citation Agent',
-    desc: 'Answers your question with real page numbers and a similarity confidence score. This one genuinely needs a document — page numbers don\'t exist without one.',
+    desc: 'Answers with real page numbers and a confidence score, re-ranked for accuracy. Select multiple documents to get citations across all of them.',
     placeholder: 'e.g. "What does the document say about limitations?"',
     requiresDoc: true,
+    multiDoc: true,
   },
   recommendation: {
     title: 'Recommendation Agent',
     desc: 'Searches Semantic Scholar and recommends papers/techniques worth exploring next.',
     placeholder: 'e.g. "transformer efficiency techniques" — or select a document and leave this blank',
     requiresDoc: false,
+    multiDoc: false,
   },
   timeline: {
     title: 'Timeline Agent',
     desc: 'Builds a chronological timeline of how a topic evolved, based on dated papers found online.',
     placeholder: 'e.g. "attention mechanisms in NLP" — or select a document and leave this blank',
     requiresDoc: false,
+    multiDoc: false,
   },
   innovation: {
     title: 'Innovation Agent',
     desc: 'Combines research gaps with recent trends to suggest novel, specific project ideas.',
     placeholder: 'e.g. "low-resource language modeling" — or select a document and leave this blank',
     requiresDoc: false,
+    multiDoc: false,
   },
 }
 
 export default function AgentLauncherView({ agentType }) {
   const info = AGENT_INFO[agentType]
   const { runAgent } = useAgentPanel()
-  const { documents, selectedId, setSelectedId } = useDocuments()
+  const { documents, selectedId } = useDocuments()
   const [question, setQuestion] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [docPickerOpen, setDocPickerOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(selectedId ? [selectedId] : [])
 
-  const selectedDoc = documents.find((d) => d.id === selectedId) || null
   const readyDocs = documents.filter((d) => d.status === 'ready')
+  const selectedDocs = documents.filter((d) => selectedIds.includes(d.id))
+
+  function toggleDoc(docId) {
+    if (info.multiDoc) {
+      setSelectedIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]))
+    } else {
+      setSelectedIds((prev) => (prev.includes(docId) ? [] : [docId]))
+      setDocPickerOpen(false)
+    }
+  }
 
   async function handleRun(e) {
     e.preventDefault()
-    if (!question.trim() && !selectedId) {
+    if (!question.trim() && selectedIds.length === 0) {
       setError('Enter a topic/question, select a document, or both.')
       return
     }
-    if (info.requiresDoc && !selectedId) {
+    if (info.requiresDoc && selectedIds.length === 0) {
       setError('This agent needs a document — select one below.')
       return
     }
     setError('')
     setSubmitting(true)
     try {
-      await runAgent(agentType, question.trim(), selectedId || null)
+      await runAgent(agentType, question.trim(), selectedIds)
       setQuestion('')
     } catch (err) {
       setError(err.response?.data?.detail || 'The agent run failed.')
@@ -89,7 +105,7 @@ export default function AgentLauncherView({ agentType }) {
           {/* Document selector — always visible, independent of the topic field */}
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-muted">
-              Document {info.requiresDoc ? '(required)' : '(optional)'}
+              Document{info.multiDoc ? '(s)' : ''} {info.requiresDoc ? '(required)' : '(optional)'}
             </label>
             <div className="relative">
               <button
@@ -99,22 +115,28 @@ export default function AgentLauncherView({ agentType }) {
               >
                 <span className="flex items-center gap-2 truncate">
                   <FileText size={14} className="shrink-0 text-ink-faint" />
-                  {selectedDoc ? selectedDoc.filename : 'No document selected'}
+                  {selectedDocs.length === 0
+                    ? 'No document selected'
+                    : selectedDocs.length === 1
+                      ? selectedDocs[0].filename
+                      : `${selectedDocs.length} documents selected`}
                 </span>
                 <ChevronDown size={14} className="shrink-0 text-ink-faint" />
               </button>
               {docPickerOpen && (
                 <div className="glass-card absolute left-0 top-full z-10 mt-1.5 max-h-56 w-full overflow-y-auto p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(null)
-                      setDocPickerOpen(false)
-                    }}
-                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-xs text-ink-muted hover:bg-surface-light hover:text-ink"
-                  >
-                    None — use topic text only
-                  </button>
+                  {!info.multiDoc && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIds([])
+                        setDocPickerOpen(false)
+                      }}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-xs text-ink-muted hover:bg-surface-light hover:text-ink"
+                    >
+                      None — use topic text only
+                    </button>
+                  )}
                   {readyDocs.length === 0 && (
                     <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
                   )}
@@ -122,18 +144,31 @@ export default function AgentLauncherView({ agentType }) {
                     <button
                       key={doc.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedId(doc.id)
-                        setDocPickerOpen(false)
-                      }}
+                      onClick={() => toggleDoc(doc.id)}
                       className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${
-                        doc.id === selectedId ? 'bg-teal/10 text-teal-bright' : 'text-ink-muted hover:bg-surface-light hover:text-ink'
+                        selectedIds.includes(doc.id) ? 'bg-teal/10 text-teal-bright' : 'text-ink-muted hover:bg-surface-light hover:text-ink'
                       }`}
                     >
+                      {info.multiDoc && (
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          selectedIds.includes(doc.id) ? 'border-teal bg-teal text-void' : 'border-surface-border'
+                        }`}>
+                          {selectedIds.includes(doc.id) && <Check size={11} />}
+                        </span>
+                      )}
                       <FileText size={13} className="shrink-0" />
                       <span className="truncate">{doc.filename}</span>
                     </button>
                   ))}
+                  {info.multiDoc && readyDocs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDocPickerOpen(false)}
+                      className="mt-1 w-full rounded-lg bg-teal/10 px-3 py-2 text-center text-xs font-medium text-teal-bright"
+                    >
+                      Done
+                    </button>
+                  )}
                 </div>
               )}
             </div>

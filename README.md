@@ -37,12 +37,17 @@ cp .env.example .env
 #   OPENAI_API_KEY=sk-...
 #   SEMANTIC_SCHOLAR_API_KEY=...   (get a free key: semanticscholar.org/product/api)
 #   JWT_SECRET=<any long random string>
+#   ADMIN_USERNAMES=<your-username>   (auto-promotes you to admin on next login)
+#   SMTP_* (optional — leave blank to just log emails to the console locally)
+#   STRIPE_* (optional — leave blank to disable billing; test mode is free)
 
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 First real chat/upload call will download the embedding model (~90MB,
 one-time) — this needs a normal internet connection, then works offline.
+The Citation Agent's re-ranker downloads a second small model
+(`cross-encoder/ms-marco-MiniLM-L-6-v2`, ~90MB) the first time it runs.
 
 Open the API docs at **http://localhost:8000/docs** (not `0.0.0.0:8000` —
 that address is only meaningful to the server, not a browser).
@@ -108,14 +113,46 @@ Open http://localhost:5173
 
 - **Citation Agent always requires a document** — page-number citations
   don't exist without one. Every other agent works with just a topic, just
-  a document, or both.
+  a document, or both, and Research/Citation also accept **multiple**
+  documents at once (compare/cite across several files).
 - **Answers match the question's language** — chat, voice, and citation
   answers are prompted to respond in whatever language the question was
   asked in, rather than drifting into a random one.
 - **Citation page numbers are informational, not clickable** — there's no
-  in-app PDF viewer yet, so "Page 3" is a label, not a link. Adding a
-  clickable viewer is a real (larger) feature, not a quick fix — worth
-  considering as a future addition.
+  in-app PDF viewer yet, so "Page 3" is a label, not a link.
+
+## New in this version (all free except Stripe's real transaction fees)
+
+- **Agent history** — every past agent run is listed (sidebar → "Agent
+  History") and can be reopened in the side panel or deleted individually.
+- **Multi-document context** — Chat and the Research/Citation agents accept
+  several documents at once (checkbox multi-select in the UI) to compare or
+  cite across files, not just one at a time.
+- **Better confidence scoring** — Citation Agent results are re-ranked by a
+  free local cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`, ~90MB
+  one-time download) instead of relying on raw vector-similarity distance.
+- **Live streaming agent steps** — `/agents/stream` + a WebSocket
+  (`/ws/agents/{run_id}`) push each step to the UI in real time as it
+  happens, instead of waiting for the whole run to finish.
+- **Email verification & password reset** — via plain SMTP (your own
+  Gmail/Outlook "app password", not a paid email API). If SMTP isn't
+  configured, emails are logged to the console instead of failing, so
+  local dev works with zero setup.
+- **Two-factor authentication (2FA)** — TOTP-based (Google Authenticator,
+  Authy, etc.) — free, no SMS provider.
+- **Admin dashboard** — user list, plan management, platform stats
+  (signups, feature usage, agent-type breakdown). Bootstrap your first
+  admin via the `ADMIN_USERNAMES` env var — they're auto-promoted on their
+  next login.
+- **Usage limits per plan (free vs. Pro)** — document count and daily
+  chat/agent limits, enforced server-side and tunable via env vars.
+- **Stripe billing** — checkout + billing portal + webhook for the
+  free→Pro upgrade. Integrating Stripe is free; only real charges cost
+  anything, and test mode (test keys, test card numbers) is entirely free
+  for development.
+- **Analytics** — the admin stats endpoint surfaces signups over time,
+  agent-type usage, and feature usage counts.
+
 
 ## Known limitations (honest, same spirit as the original roadmap)
 
@@ -147,3 +184,4 @@ work instead of the ones originally guessed:
   argument 'proxies'`) — older openai versions break on newer httpx; pinned
   to `>=1.40,<2.0` (the `<2.0` is deliberate — v2 wasn't part of this
   session's testing, so staying on 1.x until it has been).
+

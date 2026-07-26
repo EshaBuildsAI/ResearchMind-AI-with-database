@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Send, Sparkles, FileSearch, BrainCircuit, AlertCircle, X, Plus, ChevronDown, FileText } from 'lucide-react'
+import { Send, Sparkles, FileSearch, BrainCircuit, AlertCircle, X, Plus, ChevronDown, FileText, Check } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { chatApi } from '../api'
 import { useDocuments } from '../context/DocumentsContext'
@@ -11,17 +11,17 @@ export default function ChatWindow() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [attachedId, setAttachedId] = useState(selected?.id || null)
+  const [attachedIds, setAttachedIds] = useState(selected?.id ? [selected.id] : [])
   const [pickerOpen, setPickerOpen] = useState(false)
   const bottomRef = useRef(null)
   const pickerRef = useRef(null)
 
-  const attachedDoc = documents.find((d) => d.id === attachedId) || null
+  const attachedDocs = documents.filter((d) => attachedIds.includes(d.id))
   const readyDocs = documents.filter((d) => d.status === 'ready')
 
   // Keep the chat's attached document in sync when the topbar selection changes
   useEffect(() => {
-    setAttachedId(selected?.id || null)
+    setAttachedIds(selected?.id ? [selected.id] : [])
   }, [selected?.id])
 
   useEffect(() => {
@@ -36,6 +36,10 @@ export default function ChatWindow() {
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
+  function toggleDoc(docId) {
+    setAttachedIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]))
+  }
+
   async function handleSend(e) {
     e.preventDefault()
     const question = input.trim()
@@ -45,7 +49,7 @@ export default function ChatWindow() {
     setMessages((prev) => [...prev, { role: 'user', content: question }])
     setLoading(true)
     try {
-      const { data } = await chatApi.ask(question, attachedId)
+      const { data } = await chatApi.ask(question, attachedIds)
       setMessages((prev) => [...prev, { role: 'assistant', content: data.answer, sources: data.sources }])
     } catch (err) {
       setError(err.response?.data?.detail || 'Something went wrong. Please try again.')
@@ -61,53 +65,54 @@ export default function ChatWindow() {
       </div>
 
       {/* Always-visible attach strip — this is how people discover that a
-          document is optional: attach one to ask about it, or leave it off
-          and ask anything, like a normal AI assistant. */}
-      <div className="mb-4 flex items-center gap-2">
-        {attachedDoc ? (
-          <span className="chip border-teal/30 bg-teal/10 text-teal-bright">
+          document is optional: attach one (or several) to ask about them,
+          or leave it off and ask anything, like a normal AI assistant. */}
+      <div className="relative mb-4 flex flex-wrap items-center gap-2" ref={pickerRef}>
+        {attachedDocs.map((doc) => (
+          <span key={doc.id} className="chip border-teal/30 bg-teal/10 text-teal-bright">
             <FileSearch size={11} />
-            {attachedDoc.filename}
+            {doc.filename}
             <button
-              onClick={() => setAttachedId(null)}
+              onClick={() => toggleDoc(doc.id)}
               className="ml-1 rounded-full p-0.5 hover:bg-teal/20"
               aria-label="Detach document"
             >
               <X size={11} />
             </button>
           </span>
-        ) : (
-          <div className="relative" ref={pickerRef}>
-            <button
-              onClick={() => setPickerOpen((v) => !v)}
-              className="chip border-dashed border-surface-border text-ink-faint hover:border-teal/40 hover:text-teal-bright transition-colors"
-            >
-              <Plus size={11} /> Attach a document
-              <ChevronDown size={11} />
-            </button>
-            {pickerOpen && (
-              <div className="glass-card absolute left-0 top-full z-20 mt-1.5 max-h-56 w-64 overflow-y-auto p-1.5">
-                {readyDocs.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
-                )}
-                {readyDocs.map((doc) => (
-                  <button
-                    key={doc.id}
-                    onClick={() => {
-                      setAttachedId(doc.id)
-                      setPickerOpen(false)
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-ink-muted hover:bg-surface-light hover:text-ink"
-                  >
-                    <FileText size={13} className="shrink-0" />
-                    <span className="truncate">{doc.filename}</span>
-                  </button>
-                ))}
-              </div>
+        ))}
+
+        <button
+          onClick={() => setPickerOpen((v) => !v)}
+          className="chip border-dashed border-surface-border text-ink-faint hover:border-teal/40 hover:text-teal-bright transition-colors"
+        >
+          <Plus size={11} /> {attachedDocs.length > 0 ? 'Add another' : 'Attach a document'}
+          <ChevronDown size={11} />
+        </button>
+        {attachedDocs.length === 0 && <span className="text-xs text-ink-faint">or just ask anything below</span>}
+
+        {pickerOpen && (
+          <div className="glass-card absolute left-0 top-full z-20 mt-1.5 max-h-56 w-64 overflow-y-auto p-1.5">
+            {readyDocs.length === 0 && (
+              <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
             )}
+            {readyDocs.map((doc) => (
+              <button
+                key={doc.id}
+                onClick={() => toggleDoc(doc.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-ink-muted hover:bg-surface-light hover:text-ink"
+              >
+                <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                  attachedIds.includes(doc.id) ? 'border-teal bg-teal text-void' : 'border-surface-border'
+                }`}>
+                  {attachedIds.includes(doc.id) && <Check size={11} />}
+                </span>
+                <FileText size={13} className="shrink-0" />
+                <span className="truncate">{doc.filename}</span>
+              </button>
+            ))}
           </div>
         )}
-        {!attachedDoc && <span className="text-xs text-ink-faint">or just ask anything below</span>}
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto pb-4">
@@ -115,8 +120,8 @@ export default function ChatWindow() {
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-ink-faint">
             <BrainCircuit size={28} strokeWidth={1.5} />
             <p className="text-sm">
-              {attachedDoc
-                ? `Ask anything about ${attachedDoc.filename}`
+              {attachedDocs.length > 0
+                ? `Ask anything about ${attachedDocs.length === 1 ? attachedDocs[0].filename : `${attachedDocs.length} documents`}`
                 : 'Ask me anything — attach a document above for questions about it specifically'}
             </p>
           </div>
@@ -183,7 +188,7 @@ export default function ChatWindow() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={attachedDoc ? 'Ask about this document...' : 'Ask me anything...'}
+          placeholder={attachedDocs.length > 0 ? 'Ask about these documents...' : 'Ask me anything...'}
           className="input-field flex-1"
         />
         <button type="submit" disabled={loading || !input.trim()} className="btn-primary shrink-0 px-3.5">

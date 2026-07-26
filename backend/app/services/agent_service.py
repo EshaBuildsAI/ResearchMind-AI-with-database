@@ -6,7 +6,9 @@ pretending to be an agent.
 
 Every run is persisted as an AgentRun + ordered AgentStep rows so the React
 side panel can render a live step-tracker (retrieve -> search -> synthesize)
-and reopen past runs later.
+and reopen past runs later. Each step is also broadcast in real time over
+broadcaster.py so a connected WebSocket sees updates as they happen,
+instead of waiting for the whole run to finish.
 """
 
 import json
@@ -16,21 +18,40 @@ from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
 from app.models import AgentRun, AgentStep
-from app.services import llm_service, memory_service, research_search, vectorstore
+from app.services import llm_service, memory_service, research_search, vectorstore, broadcaster, reranker_service
 from app.services.prompts import (
     recommendation_prompt, timeline_prompt, innovation_prompt,
     citation_answer_prompt, planner_intent_prompt,
 )
 
 
-# ---------------- Run/step persistence helpers (drive the GUI panel) ----------------
+def _doc_ids_json(doc_ids) -> str | None:
+    if not doc_ids:
+        return None
+    if isinstance(doc_ids, str):
+        doc_ids = [doc_ids]
+    return json.dumps(list(doc_ids))
 
-def start_run(db: Session, user_id: str, document_id: str, agent_type: str, question: str) -> AgentRun:
-    run = AgentRun(user_id=user_id, document_id=document_id, agent_type=agent_type,
-                    question=question, status="running")
+
+def _first_doc_id(doc_ids):
+    if not doc_ids:
+        return None
+    if isinstance(doc_ids, str):
+        return doc_ids
+    return doc_ids[0] if doc_ids else None
+
+
+# ---------------- Run/step persistence helpers (drive the GUI panel + WS stream) ----------------
+
+def start_run(db: Session, user_id: str, doc_ids, agent_type: str, question: str) -> AgentRun:
+    run = AgentRun(
+        user_id=user_id, document_id=_first_doc_id(doc_ids), document_ids_json=_doc_ids_json(doc_ids),
+        agent_type=agent_type, question=question, status="running",
+    )
     db.add(run)
     db.commit()
     db.refresh(run)
+    broadcaster.publish(run.id, {"type": "run_started", "run_id": run.id, "agent_type": agent_type})
     return run
 
 
@@ -42,6 +63,10 @@ def add_step(db: Session, run: AgentRun, index: int, name: str, label: str,
     )
     db.add(step)
     db.commit()
+    broadcaster.publish(run.id, {
+        "type": "step", "run_id": run.id, "step_index": index, "name": name,
+        "label": label, "status": status, "detail": detail,
+    })
     return step
 
 
@@ -53,6 +78,10 @@ def finish_run(db: Session, run: AgentRun, result_text: str = None, result_json:
     run.error_message = error
     db.commit()
     db.refresh(run)
+    broadcaster.publish(run.id, {
+        "type": "run_finished", "run_id": run.id, "status": status,
+        "result_text": result_text, "result": result_json, "error": error,
+    })
     return run
 
 
@@ -65,23 +94,31 @@ def delete_run(db: Session, user_id: str, run_id: str) -> bool:
     return True
 
 
+def list_runs(db: Session, user_id: str, document_id: str = None, limit: int = 50) -> list:
+    q = db.query(AgentRun).filter(AgentRun.user_id == user_id)
+    if document_id:
+        q = q.filter(AgentRun.document_id == document_id)
+    return q.order_by(AgentRun.created_at.desc()).limit(limit).all()
+
+
 # =====================================================================
 # RESEARCH AGENT — retrieve_docs -> search_web -> synthesize
+# (supports zero, one, or multiple documents as context)
 # =====================================================================
 
 class AgentState(TypedDict):
     question: str
-    doc_id: str
+    doc_ids: list
     user_id: str
     doc_context: List[str]
     web_results: List[dict]
     answer: str
 
 
-def _build_research_graph(user_id: str, doc_id: str | None):
+def _build_research_graph(user_id: str, doc_ids: list | None):
     def node_retrieve(state: AgentState) -> AgentState:
-        if doc_id:
-            state["doc_context"] = vectorstore.query(user_id, state["question"], doc_id=doc_id)
+        if doc_ids:
+            state["doc_context"] = vectorstore.query(user_id, state["question"], doc_id=doc_ids)
         else:
             state["doc_context"] = []
         return state
@@ -132,25 +169,30 @@ ANSWER (explanation first, "Further reading" links at the very end):"""
     return graph.compile()
 
 
-def run_research_agent(db: Session, user_id: str, doc_id: str | None, question: str) -> AgentRun:
-    run = start_run(db, user_id, doc_id, "research", question)
+def run_research_agent(db: Session, user_id: str, doc_ids, question: str, run: AgentRun = None) -> AgentRun:
+    """doc_ids: None, a single doc_id string, or a list of doc_ids (multi-document context).
+    Pass an existing `run` (from start_run) to reuse it — used by the streaming/background path."""
+    doc_id_list = [doc_ids] if isinstance(doc_ids, str) else (list(doc_ids) if doc_ids else [])
+    run = run or start_run(db, user_id, doc_id_list, "research", question)
     try:
-        agent = _build_research_graph(user_id, doc_id)
+        agent = _build_research_graph(user_id, doc_id_list or None)
         result = agent.invoke({
-            "question": question, "doc_id": doc_id, "user_id": user_id,
+            "question": question, "doc_ids": doc_id_list, "user_id": user_id,
             "doc_context": [], "web_results": [], "answer": "",
         })
 
-        add_step(db, run, 0, "retrieve_docs",
-                 "Retrieving relevant passages from your document" if doc_id else "No document provided — skipping document retrieval",
-                 detail={"chunks_found": len(result["doc_context"])})
+        retrieve_label = (
+            f"Retrieving relevant passages from {len(doc_id_list)} document(s)" if doc_id_list
+            else "No document provided — skipping document retrieval"
+        )
+        add_step(db, run, 0, "retrieve_docs", retrieve_label, detail={"chunks_found": len(result["doc_context"])})
         add_step(db, run, 1, "search_web", "Searching arXiv + Semantic Scholar",
                  detail={"papers": result["web_results"]})
         add_step(db, run, 2, "synthesize", "Synthesizing a cited answer",
                  detail={"answer_preview": result["answer"][:200]})
 
-        if doc_id:
-            memory_service.save_memory_entry(db, user_id, doc_id, question, result["answer"])
+        if doc_id_list:
+            memory_service.save_memory_entry(db, user_id, doc_id_list[0], question, result["answer"])
         return finish_run(db, run, result_text=result["answer"], result_json={"sources": result["web_results"]})
     except Exception as e:
         return finish_run(db, run, status="failed", error=str(e))
@@ -161,8 +203,8 @@ def run_research_agent(db: Session, user_id: str, doc_id: str | None, question: 
 # before asking GPT-4o-mini to synthesize.
 # =====================================================================
 
-def run_recommendation_agent(db: Session, user_id: str, doc_id: str, topic_query: str) -> AgentRun:
-    run = start_run(db, user_id, doc_id, "recommendation", topic_query)
+def run_recommendation_agent(db: Session, user_id: str, doc_id, topic_query: str, run: AgentRun = None) -> AgentRun:
+    run = run or start_run(db, user_id, doc_id, "recommendation", topic_query)
     try:
         papers = research_search.search_related_papers(topic_query, max_results=6)
         add_step(db, run, 0, "search_web", "Searching Semantic Scholar for related papers",
@@ -183,8 +225,8 @@ def run_recommendation_agent(db: Session, user_id: str, doc_id: str, topic_query
         return finish_run(db, run, status="failed", error=str(e))
 
 
-def run_timeline_agent(db: Session, user_id: str, doc_id: str, topic_query: str) -> AgentRun:
-    run = start_run(db, user_id, doc_id, "timeline", topic_query)
+def run_timeline_agent(db: Session, user_id: str, doc_id, topic_query: str, run: AgentRun = None) -> AgentRun:
+    run = run or start_run(db, user_id, doc_id, "timeline", topic_query)
     try:
         papers = research_search.search_related_papers(topic_query, max_results=8)
         papers = [p for p in papers if p.get("year")]
@@ -207,8 +249,8 @@ def run_timeline_agent(db: Session, user_id: str, doc_id: str, topic_query: str)
         return finish_run(db, run, status="failed", error=str(e))
 
 
-def run_innovation_agent(db: Session, user_id: str, doc_id: str, research_gaps_text: str, topic_query: str) -> AgentRun:
-    run = start_run(db, user_id, doc_id, "innovation", topic_query)
+def run_innovation_agent(db: Session, user_id: str, doc_id, research_gaps_text: str, topic_query: str, run: AgentRun = None) -> AgentRun:
+    run = run or start_run(db, user_id, doc_id, "innovation", topic_query)
     try:
         papers = research_search.search_related_papers(topic_query, max_results=6)
         add_step(db, run, 0, "search_web", "Searching Semantic Scholar for recent trends",
@@ -224,11 +266,18 @@ def run_innovation_agent(db: Session, user_id: str, doc_id: str, research_gaps_t
         return finish_run(db, run, status="failed", error=str(e))
 
 
-def run_citation_agent(db: Session, user_id: str, doc_id: str, question: str) -> AgentRun:
-    run = start_run(db, user_id, doc_id, "citation", question)
+def run_citation_agent(db: Session, user_id: str, doc_ids, question: str, run: AgentRun = None) -> AgentRun:
+    """doc_ids: a single doc_id string or a list of doc_ids (multi-document
+    citations — each citation card is labeled with which document it came from).
+    Pass an existing `run` to reuse it — used by the streaming/background path."""
+    doc_id_list = [doc_ids] if isinstance(doc_ids, str) else list(doc_ids)
+    run = run or start_run(db, user_id, doc_id_list, "citation", question)
     try:
-        cited_chunks = vectorstore.query_with_metadata(user_id, question, doc_id=doc_id)
-        add_step(db, run, 0, "retrieve_docs", "Retrieving page-level citations",
+        cited_chunks = vectorstore.query_with_metadata(user_id, question, doc_id=doc_id_list)
+        # Re-rank with a free local cross-encoder for a more accurate,
+        # calibrated confidence score than raw vector-similarity distance.
+        cited_chunks = reranker_service.rerank(question, cited_chunks)
+        add_step(db, run, 0, "retrieve_docs", "Retrieving page-level citations (re-ranked for accuracy)",
                  detail={"citations": cited_chunks})
 
         if not cited_chunks:
@@ -324,6 +373,7 @@ def _build_planner_graph():
             state["result"] = {"answer": "The Citation Agent needs an uploaded document to point to a page number — please select one and try again.", "citations": []}
             return state
         cited_chunks = vectorstore.query_with_metadata(state["user_id"], state["question"], doc_id=state["doc_id"])
+        cited_chunks = reranker_service.rerank(state["question"], cited_chunks)
         answer = llm_service.generate(citation_answer_prompt(state["question"], cited_chunks)) if cited_chunks else \
             "No relevant passages were found in this document."
         state["result"] = {"answer": answer, "citations": cited_chunks}
@@ -360,8 +410,8 @@ def _build_planner_graph():
 
 
 def run_planner_agent(db: Session, user_id: str, doc_id: str, question: str,
-                       topic: str = "", research_gaps: str = "") -> AgentRun:
-    run = start_run(db, user_id, doc_id, "planner", question)
+                       topic: str = "", research_gaps: str = "", run: AgentRun = None) -> AgentRun:
+    run = run or start_run(db, user_id, doc_id, "planner", question)
     try:
         planner = _build_planner_graph()
         final_state = planner.invoke({

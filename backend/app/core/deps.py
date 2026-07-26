@@ -40,3 +40,25 @@ def get_current_user(
     if user is None:
         raise unauthorized
     return user
+
+
+def get_current_admin_user(user: User = Depends(get_current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
+
+def get_user_from_token_string(token: str, db: Session) -> User | None:
+    """Same verification as get_current_user, but for contexts without a
+    request header — e.g. a WebSocket connection, where the token comes as
+    a query parameter instead."""
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            return None
+        user_id = payload.get("sub")
+    except JWTError:
+        return None
+    if not user_id:
+        return None
+    return db.query(User).filter(User.id == user_id).first()

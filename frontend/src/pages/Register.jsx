@@ -54,7 +54,7 @@ export default function Register() {
         {success ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <CheckCircle2 size={32} className="text-teal-bright" />
-            <p className="text-sm text-ink">Account created. Redirecting to sign in...</p>
+            <p className="text-sm text-ink">Account created. Check your email to verify your account. Redirecting to sign in...</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

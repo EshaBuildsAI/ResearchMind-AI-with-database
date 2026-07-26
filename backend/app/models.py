@@ -6,6 +6,7 @@ of a convention someone can forget to apply in a query.
 """
 
 import uuid
+import json
 from datetime import datetime
 
 from sqlalchemy import (
@@ -32,6 +33,29 @@ class User(Base):
     # Login rate-limiting state (brute-force protection)
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime, nullable=True)
+
+    # ---------------- Email verification ----------------
+    email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(64), nullable=True, index=True)
+    email_verification_sent_at = Column(DateTime, nullable=True)
+
+    # ---------------- Password reset ----------------
+    password_reset_token = Column(String(64), nullable=True, index=True)
+    password_reset_expires = Column(DateTime, nullable=True)
+
+    # ---------------- Two-factor authentication (TOTP, free — no SMS provider) ----------------
+    totp_secret = Column(String(64), nullable=True)
+    totp_enabled = Column(Boolean, default=False)
+
+    # ---------------- Admin / roles ----------------
+    is_admin = Column(Boolean, default=False)
+
+    # ---------------- Plan / billing (Stripe test mode — no cost to integrate) ----------------
+    plan = Column(String(20), default="free")  # free | pro
+    plan_renews_at = Column(DateTime, nullable=True)
+    stripe_customer_id = Column(String(255), nullable=True, index=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    stripe_subscription_status = Column(String(50), nullable=True)
 
     documents = relationship(
         "Document", back_populates="owner", cascade="all, delete-orphan"
@@ -74,6 +98,9 @@ class ChatMessage(Base):
     id = Column(String, primary_key=True, default=gen_uuid)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     document_id = Column(String, ForeignKey("documents.id"), nullable=True, index=True)
+    # Multi-document context: JSON list of doc ids, in addition to document_id
+    # (which stays as the first one, for backward compatibility with old rows).
+    document_ids_json = Column(Text, nullable=True)
 
     role = Column(String(20), nullable=False)  # user | assistant
     content = Column(Text, nullable=False)
@@ -83,6 +110,11 @@ class ChatMessage(Base):
 
     owner = relationship("User", back_populates="chat_messages")
     document = relationship("Document", back_populates="chat_messages")
+
+    def document_ids(self) -> list:
+        if self.document_ids_json:
+            return json.loads(self.document_ids_json)
+        return [self.document_id] if self.document_id else []
 
 
 class AgentRun(Base):
@@ -94,6 +126,7 @@ class AgentRun(Base):
     id = Column(String, primary_key=True, default=gen_uuid)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     document_id = Column(String, ForeignKey("documents.id"), nullable=True, index=True)
+    document_ids_json = Column(Text, nullable=True)  # multi-document context
 
     agent_type = Column(String(50), nullable=False)  # research | planner | recommendation | timeline | innovation | citation
     question = Column(Text, nullable=False)
@@ -106,6 +139,11 @@ class AgentRun(Base):
 
     steps = relationship("AgentStep", back_populates="run", cascade="all, delete-orphan",
                           order_by="AgentStep.step_index")
+
+    def document_ids(self) -> list:
+        if self.document_ids_json:
+            return json.loads(self.document_ids_json)
+        return [self.document_id] if self.document_id else []
 
 
 class AgentStep(Base):
@@ -138,3 +176,15 @@ class SmartMemoryEntry(Base):
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UsageCounter(Base):
+    """Daily per-user usage counters, backing the free/pro plan limits.
+    One row per (user_id, date, bucket) — e.g. bucket='chat' or 'agent'."""
+    __tablename__ = "usage_counters"
+
+    id = Column(String, primary_key=True, default=gen_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    date_key = Column(String(10), nullable=False, index=True)  # 'YYYY-MM-DD'
+    bucket = Column(String(30), nullable=False)  # chat | agent | upload
+    count = Column(Integer, default=0)

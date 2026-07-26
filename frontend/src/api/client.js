@@ -11,6 +11,10 @@ function getTokens() {
   }
 }
 
+export function getAccessToken() {
+  return localStorage.getItem('rm_access_token')
+}
+
 export function setTokens({ access_token, refresh_token }) {
   if (access_token) localStorage.setItem('rm_access_token', access_token)
   if (refresh_token) localStorage.setItem('rm_refresh_token', refresh_token)
