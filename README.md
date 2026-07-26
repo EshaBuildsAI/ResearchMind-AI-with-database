@@ -1,4 +1,4 @@
-# ResearchMind AI — V4 (React + FastAPI + PostgreSQL)
+# ResearchMind AI  (React + FastAPI + PostgreSQL)
 
 Production-track rebuild of the Streamlit V3 app. Dark glassmorphism UI,
 teal/coral identity, multi-agent research assistant, all free except
@@ -152,6 +152,22 @@ Open http://localhost:5173
   for development.
 - **Analytics** — the admin stats endpoint surfaces signups over time,
   agent-type usage, and feature usage counts.
+<<<<<<< HEAD
+=======
+- **"View source" on citations** — every Citation Agent result links back
+  to the original uploaded file, opened in a new tab (not a page-jump PDF
+  viewer — see "Behavior notes" above for why that's a separate, larger
+  feature).
+
+## Setup gotchas (things that look like bugs but are just missing config)
+
+- **`ADMIN_USERNAMES` takes a username, not an email.** Use the exact
+  value from the `username` field (check `/auth/me` in your browser's
+  Network tab if unsure) — not the email you registered with.
+- Admin status is picked up on your **next `/auth/me` call**, which
+  happens on login *or* a plain page refresh — you don't need to log out
+  and back in, a refresh (F5) after restarting the backend is enough.
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
 
 
 ## Known limitations (honest, same spirit as the original roadmap)
@@ -184,4 +200,16 @@ work instead of the ones originally guessed:
   argument 'proxies'`) — older openai versions break on newer httpx; pinned
   to `>=1.40,<2.0` (the `<2.0` is deliberate — v2 wasn't part of this
   session's testing, so staying on 1.x until it has been).
+<<<<<<< HEAD
 
+=======
+- **Live agent panel stuck on "Starting agent pipeline..."** — streaming
+  agent runs execute in a background thread, and that thread's
+  `broadcaster.publish()` call used `asyncio.get_event_loop()` to schedule
+  the WebSocket send. Called from a worker thread (not the main event
+  loop), that silently failed — the run still completed and saved to the
+  database correctly (so Agent History always showed the full result),
+  but nothing ever reached the live panel. Fixed by capturing the real
+  running loop once at startup (`main.py`) and always targeting that
+  specific loop from `broadcaster.py`, regardless of which thread calls it.
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38

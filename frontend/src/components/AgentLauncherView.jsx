@@ -1,5 +1,9 @@
 import { useState } from 'react'
+<<<<<<< HEAD
 import { Sparkles, AlertCircle } from 'lucide-react'
+=======
+import { Sparkles, AlertCircle, FileText, ChevronDown, Check } from 'lucide-react'
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
 import { useAgentPanel } from '../context/AgentPanelContext'
 import { useDocuments } from '../context/DocumentsContext'
 import DocumentPicker from './DocumentPicker'
@@ -52,11 +56,32 @@ const AGENT_INFO = {
 export default function AgentLauncherView({ agentType }) {
   const info = AGENT_INFO[agentType]
   const { runAgent } = useAgentPanel()
+<<<<<<< HEAD
   const { selectedId } = useDocuments()
   const [question, setQuestion] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [selectedIds, setSelectedIds] = useState(selectedId ? [selectedId] : [])
+=======
+  const { documents, selectedId } = useDocuments()
+  const [question, setQuestion] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [docPickerOpen, setDocPickerOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(selectedId ? [selectedId] : [])
+
+  const readyDocs = documents.filter((d) => d.status === 'ready')
+  const selectedDocs = documents.filter((d) => selectedIds.includes(d.id))
+
+  function toggleDoc(docId) {
+    if (info.multiDoc) {
+      setSelectedIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]))
+    } else {
+      setSelectedIds((prev) => (prev.includes(docId) ? [] : [docId]))
+      setDocPickerOpen(false)
+    }
+  }
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
 
   async function handleRun(e) {
     e.preventDefault()
@@ -65,7 +90,11 @@ export default function AgentLauncherView({ agentType }) {
       return
     }
     if (info.requiresDoc && selectedIds.length === 0) {
+<<<<<<< HEAD
       setError('This agent needs a document — select or upload one below.')
+=======
+      setError('This agent needs a document — select one below.')
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
       return
     }
     setError('')
@@ -90,12 +119,86 @@ export default function AgentLauncherView({ agentType }) {
         <p className="mt-1.5 text-sm text-ink-muted">{info.desc}</p>
 
         <form onSubmit={handleRun} className="mt-5 space-y-3">
+<<<<<<< HEAD
           <DocumentPicker
             selectedIds={selectedIds}
             onChange={setSelectedIds}
             multiDoc={info.multiDoc}
             label={`Document${info.multiDoc ? '(s)' : ''} ${info.requiresDoc ? '(required)' : '(optional — or upload a new one)'}`}
           />
+=======
+          {/* Document selector — always visible, independent of the topic field */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-muted">
+              Document{info.multiDoc ? '(s)' : ''} {info.requiresDoc ? '(required)' : '(optional)'}
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDocPickerOpen((v) => !v)}
+                className="input-field flex items-center justify-between text-left"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <FileText size={14} className="shrink-0 text-ink-faint" />
+                  {selectedDocs.length === 0
+                    ? 'No document selected'
+                    : selectedDocs.length === 1
+                      ? selectedDocs[0].filename
+                      : `${selectedDocs.length} documents selected`}
+                </span>
+                <ChevronDown size={14} className="shrink-0 text-ink-faint" />
+              </button>
+              {docPickerOpen && (
+                <div className="glass-card absolute left-0 top-full z-10 mt-1.5 max-h-56 w-full overflow-y-auto p-1.5">
+                  {!info.multiDoc && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIds([])
+                        setDocPickerOpen(false)
+                      }}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-xs text-ink-muted hover:bg-surface-light hover:text-ink"
+                    >
+                      None — use topic text only
+                    </button>
+                  )}
+                  {readyDocs.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
+                  )}
+                  {readyDocs.map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => toggleDoc(doc.id)}
+                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${
+                        selectedIds.includes(doc.id) ? 'bg-teal/10 text-teal-bright' : 'text-ink-muted hover:bg-surface-light hover:text-ink'
+                      }`}
+                    >
+                      {info.multiDoc && (
+                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          selectedIds.includes(doc.id) ? 'border-teal bg-teal text-void' : 'border-surface-border'
+                        }`}>
+                          {selectedIds.includes(doc.id) && <Check size={11} />}
+                        </span>
+                      )}
+                      <FileText size={13} className="shrink-0" />
+                      <span className="truncate">{doc.filename}</span>
+                    </button>
+                  ))}
+                  {info.multiDoc && readyDocs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDocPickerOpen(false)}
+                      className="mt-1 w-full rounded-lg bg-teal/10 px-3 py-2 text-center text-xs font-medium text-teal-bright"
+                    >
+                      Done
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-muted">

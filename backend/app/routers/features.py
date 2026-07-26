@@ -18,7 +18,11 @@ from app.models import Document, User
 from app.schemas import (
     FlashcardRequest, PresentationRequest, ProposalRequest, QuizRequest, SummaryRequest,
 )
+<<<<<<< HEAD
 from app.services import guardrails, llm_service, memory_service, pptx_generator, rate_limit, usage_service, vectorstore
+=======
+from app.services import guardrails, llm_service, memory_service, rate_limit, usage_service, vectorstore
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
 from app.services.llm_service import LLMNotConfigured
 
 router = APIRouter(prefix="/features", tags=["features"])
@@ -99,7 +103,10 @@ def research_gap(payload: SummaryRequest, current_user: User = Depends(get_curre
 def presentation(payload: PresentationRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
+<<<<<<< HEAD
     document = db.query(Document).filter(Document.id == payload.document_id, Document.user_id == current_user.id).first()
+=======
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
     text = _get_ready_document_text(db, current_user.id, payload.document_id)
     slides = _run(llm_service.generate_presentation_outline, text, payload.num_slides)
     if not slides:

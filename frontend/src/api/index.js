@@ -111,4 +111,8 @@ export const adminApi = {
   listUsers: () => client.get('/admin/users'),
   promoteUser: (userId) => client.post(`/admin/users/${userId}/promote`),
   setPlan: (userId, plan) => client.post(`/admin/users/${userId}/set-plan?plan=${plan}`),
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
