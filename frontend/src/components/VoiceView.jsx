@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Mic, Square, Loader2, Volume2, AlertCircle, User, Bot } from 'lucide-react'
+import { Mic, Square, Loader2, Volume2, AlertCircle, User, Bot, Telescope, MessageCircle } from 'lucide-react'
 import { voiceApi } from '../api'
 import { useDocuments } from '../context/DocumentsContext'
 
@@ -10,6 +10,7 @@ export default function VoiceView() {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [audioUrl, setAudioUrl] = useState(null)
+  const [researchMode, setResearchMode] = useState(false)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
 
@@ -40,7 +41,7 @@ export default function VoiceView() {
     const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
     setLoading(true)
     try {
-      const { data } = await voiceApi.ask(blob, selected?.id, true)
+      const { data } = await voiceApi.ask(blob, selected?.id, true, researchMode)
       setResult(data)
       if (data.audio_base64) {
         const audioBlob = base64ToBlob(data.audio_base64, 'audio/mpeg')
@@ -65,10 +66,38 @@ export default function VoiceView() {
       <div className="glass-card p-8 text-center">
         <h1 className="font-display text-lg font-semibold text-ink">Voice Assistant</h1>
         <p className="mt-1.5 text-sm text-ink-muted">
-          Record a question about {selected ? selected.filename : 'your research'} and get a spoken answer.
+          Record a question about {selected ? selected.filename : 'your research'} — or ask anything at all —
+          and get a spoken answer.
         </p>
 
-        <div className="mt-8 flex flex-col items-center gap-4">
+        {/* Mode toggle — same doc+web-search power as the Research Agent, spoken instead of typed */}
+        <div className="mx-auto mt-5 flex w-fit rounded-xl border border-surface-border bg-surface-light p-1">
+          <button
+            onClick={() => setResearchMode(false)}
+            disabled={recording || loading}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              !researchMode ? 'bg-teal text-void' : 'text-ink-muted'
+            }`}
+          >
+            <MessageCircle size={13} /> Quick answer
+          </button>
+          <button
+            onClick={() => setResearchMode(true)}
+            disabled={recording || loading}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              researchMode ? 'bg-teal text-void' : 'text-ink-muted'
+            }`}
+          >
+            <Telescope size={13} /> Research mode
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-ink-faint">
+          {researchMode
+            ? 'Also searches arXiv + Semantic Scholar before answering, like the Research Agent.'
+            : 'Answers from the attached document (if any) or general knowledge.'}
+        </p>
+
+        <div className="mt-6 flex flex-col items-center gap-4">
           <button
             onClick={recording ? stopRecording : startRecording}
             disabled={loading}
@@ -87,7 +116,13 @@ export default function VoiceView() {
             )}
           </button>
           <p className="text-xs text-ink-faint">
-            {loading ? 'Transcribing and answering...' : recording ? 'Recording — tap to stop' : 'Tap to record a question'}
+            {loading
+              ? researchMode
+                ? 'Transcribing, searching, and answering...'
+                : 'Transcribing and answering...'
+              : recording
+                ? 'Recording — tap to stop'
+                : 'Tap to record a question'}
           </p>
         </div>
 

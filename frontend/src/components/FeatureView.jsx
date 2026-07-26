@@ -2,9 +2,13 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { motion } from 'framer-motion'
 import { FileText, HelpCircle, Layers, BookOpen, SearchCode, Presentation as PresentationIcon,
-  GraduationCap, AlertCircle, Sparkles, Check, X, RotateCw } from 'lucide-react'
+  GraduationCap, AlertCircle, Sparkles, Check, X, RotateCw, Download } from 'lucide-react'
 import { featuresApi } from '../api'
 import { useDocuments } from '../context/DocumentsContext'
+import { getAccessToken } from '../api/client'
+import DocumentPicker from './DocumentPicker'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const TOOL_INFO = {
   'tool-summary': { title: 'Smart Summary', icon: FileText, desc: 'Get a structured summary of your document.' },
@@ -12,25 +16,23 @@ const TOOL_INFO = {
   'tool-flashcards': { title: 'Flashcards', icon: Layers, desc: 'Study key concepts and terms.' },
   'tool-literature': { title: 'Literature Review', icon: BookOpen, desc: 'Auto-generate a literature review section.' },
   'tool-gap': { title: 'Research Gap Finder', icon: SearchCode, desc: 'Find missing topics, limitations, and future work.' },
-  'tool-presentation': { title: 'Presentation Studio', icon: PresentationIcon, desc: 'Turn your research into a slide outline.' },
+  'tool-presentation': { title: 'Presentation Studio', icon: PresentationIcon, desc: 'Turn your research into a fully designed, downloadable .pptx deck.' },
   'tool-proposal': { title: 'Proposal Generator', icon: GraduationCap, desc: 'Draft a BS/MS final year research proposal.' },
 }
 
 export default function FeatureView({ toolId }) {
   const info = TOOL_INFO[toolId]
-  const { selected } = useDocuments()
+  const { selectedId: topbarSelectedId } = useDocuments()
+  const [selectedIds, setSelectedIds] = useState(topbarSelectedId ? [topbarSelectedId] : [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const Icon = info.icon
+  const documentId = selectedIds[0] || null
 
   async function handleGenerate() {
-    if (!selected) {
-      setError('Select a document from the top bar first.')
-      return
-    }
-    if (selected.status !== 'ready') {
-      setError(`Document is still ${selected.status}. Wait until it's ready.`)
+    if (!documentId) {
+      setError('Select a document above, or upload a new one.')
       return
     }
     setError('')
@@ -40,30 +42,30 @@ export default function FeatureView({ toolId }) {
       let data
       switch (toolId) {
         case 'tool-summary':
-          data = (await featuresApi.summary(selected.id, 'medium')).data
+          data = (await featuresApi.summary(documentId, 'medium')).data
           break
         case 'tool-quiz':
-          data = (await featuresApi.quiz(selected.id, 5)).data
+          data = (await featuresApi.quiz(documentId, 5)).data
           break
         case 'tool-flashcards':
-          data = (await featuresApi.flashcards(selected.id, 10)).data
+          data = (await featuresApi.flashcards(documentId, 10)).data
           break
         case 'tool-literature':
-          data = (await featuresApi.literatureReview(selected.id)).data
+          data = (await featuresApi.literatureReview(documentId)).data
           break
         case 'tool-gap':
-          data = (await featuresApi.researchGap(selected.id)).data
+          data = (await featuresApi.researchGap(documentId)).data
           break
         case 'tool-presentation':
-          data = (await featuresApi.presentation(selected.id, 8)).data
+          data = (await featuresApi.presentation(documentId, 8)).data
           break
         case 'tool-proposal':
-          data = (await featuresApi.proposal(selected.id, 'BS', '')).data
+          data = (await featuresApi.proposal(documentId, 'BS', '')).data
           break
       }
       setResult(data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Generation failed. Please try again.')
+      setError(err.response?.data?.detail || 'Generation failed. Please try again. Make sure the document has finished processing.')
     } finally {
       setLoading(false)
     }
@@ -82,16 +84,14 @@ export default function FeatureView({ toolId }) {
       </div>
 
       {!result && (
-        <div className="glass-card p-6 text-center">
-          <p className="mb-4 text-sm text-ink-muted">
-            {selected ? `Generate for ${selected.filename}` : 'Select a document from the top bar first.'}
-          </p>
+        <div className="glass-card space-y-4 p-6">
+          <DocumentPicker selectedIds={selectedIds} onChange={setSelectedIds} multiDoc={false} label="Document" />
           <button onClick={handleGenerate} disabled={loading} className="btn-primary mx-auto">
             <Sparkles size={15} />
             {loading ? 'Generating...' : 'Generate'}
           </button>
           {error && (
-            <div className="mx-auto mt-4 flex max-w-sm items-start gap-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-left text-xs text-coral-glow">
+            <div className="mx-auto flex max-w-sm items-start gap-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-left text-xs text-coral-glow">
               <AlertCircle size={14} className="mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -114,7 +114,7 @@ export default function FeatureView({ toolId }) {
 function ResultRenderer({ toolId, result }) {
   if (toolId === 'tool-quiz') return <QuizResult questions={result.questions} />
   if (toolId === 'tool-flashcards') return <FlashcardsResult cards={result.cards} />
-  if (toolId === 'tool-presentation') return <PresentationResult slides={result.slides} />
+  if (toolId === 'tool-presentation') return <PresentationResult slides={result.slides} fileId={result.file_id} />
 
   const text = result.summary || result.literature_review || result.research_gaps || result.proposal
   return (
@@ -186,9 +186,23 @@ function FlashcardsResult({ cards }) {
   )
 }
 
-function PresentationResult({ slides }) {
+function PresentationResult({ slides, fileId }) {
+  const downloadUrl = fileId
+    ? `${API_BASE_URL}/features/presentation/download/${fileId}?token=${encodeURIComponent(getAccessToken() || '')}`
+    : null
+
   return (
     <div className="space-y-3">
+      {downloadUrl ? (
+        <a href={downloadUrl} className="btn-primary w-full">
+          <Download size={15} /> Download designed .pptx
+        </a>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-xs text-coral-glow">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <span>The slide content generated fine, but the downloadable file couldn't be built. You can still read the outline below.</span>
+        </div>
+      )}
       {slides.map((slide, i) => (
         <div key={i} className="glass-card p-4">
           <p className="mb-2 text-xs font-medium text-teal-bright">Slide {i + 1}</p>

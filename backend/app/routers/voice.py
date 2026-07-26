@@ -1,7 +1,8 @@
 """
 app/routers/voice.py
 Voice Assistant — upload a voice question (audio file), get it transcribed,
-answered via RAG, and optionally returned as spoken audio (TTS).
+answered via RAG (or, in research mode, the same doc+web-search synthesis
+as the Research Agent), and optionally returned as spoken audio (TTS).
 """
 
 import io
@@ -15,7 +16,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models import ChatMessage, User
 from app.schemas import TTSRequest
-from app.services import guardrails, llm_service, rate_limit, vectorstore, voice_service
+from app.services import agent_service, guardrails, llm_service, rate_limit, vectorstore, voice_service
 from app.services.llm_service import LLMNotConfigured
 
 router = APIRouter(prefix="/voice", tags=["voice"])
@@ -26,6 +27,7 @@ async def voice_ask(
     audio: UploadFile = File(...),
     document_id: str | None = Form(None),
     speak_response: bool = Form(False),
+    research_mode: bool = Form(False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -44,7 +46,15 @@ async def voice_ask(
         raise HTTPException(400, f"Transcribed question was invalid: {cleaned_or_error}")
     question = cleaned_or_error
 
-    if document_id:
+    if research_mode:
+        # Same doc+web-search synthesis as the Research Agent — a spoken
+        # question can pull in arXiv/Semantic Scholar too, not just
+        # whatever's in one document or GPT's own knowledge.
+        try:
+            answer = agent_service.quick_research_answer(current_user.id, document_id, question)
+        except LLMNotConfigured as e:
+            raise HTTPException(503, str(e))
+    elif document_id:
         chunks = vectorstore.query(current_user.id, question, doc_id=document_id)
         try:
             answer = llm_service.answer_question(question, chunks)

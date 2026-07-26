@@ -1,20 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Send, Sparkles, FileSearch, BrainCircuit, AlertCircle, X, Plus, ChevronDown, FileText, Check } from 'lucide-react'
+import { Send, Sparkles, FileSearch, BrainCircuit, AlertCircle, X, Plus, ChevronDown, FileText, Check, UploadCloud, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { chatApi } from '../api'
 import { useDocuments } from '../context/DocumentsContext'
 
 export default function ChatWindow() {
-  const { documents, selected } = useDocuments()
+  const { documents, selected, upload } = useDocuments()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [attachedIds, setAttachedIds] = useState(selected?.id ? [selected.id] : [])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const bottomRef = useRef(null)
   const pickerRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const attachedDocs = documents.filter((d) => attachedIds.includes(d.id))
   const readyDocs = documents.filter((d) => d.status === 'ready')
@@ -38,6 +40,23 @@ export default function ChatWindow() {
 
   function toggleDoc(docId) {
     setAttachedIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]))
+  }
+
+  async function handleUploadNew(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const doc = await upload(file)
+      setAttachedIds((prev) => [...prev, doc.id])
+      setPickerOpen(false)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
   }
 
   async function handleSend(e) {
@@ -66,7 +85,8 @@ export default function ChatWindow() {
 
       {/* Always-visible attach strip — this is how people discover that a
           document is optional: attach one (or several) to ask about them,
-          or leave it off and ask anything, like a normal AI assistant. */}
+          upload a brand new one right here, or leave it off and ask
+          anything, like a normal AI assistant. */}
       <div className="relative mb-4 flex flex-wrap items-center gap-2" ref={pickerRef}>
         {attachedDocs.map((doc) => (
           <span key={doc.id} className="chip border-teal/30 bg-teal/10 text-teal-bright">
@@ -92,10 +112,7 @@ export default function ChatWindow() {
         {attachedDocs.length === 0 && <span className="text-xs text-ink-faint">or just ask anything below</span>}
 
         {pickerOpen && (
-          <div className="glass-card absolute left-0 top-full z-20 mt-1.5 max-h-56 w-64 overflow-y-auto p-1.5">
-            {readyDocs.length === 0 && (
-              <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
-            )}
+          <div className="glass-card absolute left-0 top-full z-20 mt-1.5 max-h-64 w-64 overflow-y-auto p-1.5">
             {readyDocs.map((doc) => (
               <button
                 key={doc.id}
@@ -111,6 +128,16 @@ export default function ChatWindow() {
                 <span className="truncate">{doc.filename}</span>
               </button>
             ))}
+            <div className="my-1.5 border-t border-surface-border" />
+            <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.docx,.pptx,.xlsx,.txt" onChange={handleUploadNew} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-teal-bright hover:bg-teal/10"
+            >
+              {uploading ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
+              {uploading ? 'Uploading...' : 'Upload a new document'}
+            </button>
           </div>
         )}
       </div>

@@ -198,6 +198,21 @@ def run_research_agent(db: Session, user_id: str, doc_ids, question: str, run: A
         return finish_run(db, run, status="failed", error=str(e))
 
 
+def quick_research_answer(user_id: str, doc_id: str | None, question: str) -> str:
+    """Lightweight version of the Research Agent for contexts that just need
+    an answer string — no AgentRun/step persistence, no GUI panel. Used by
+    the Voice Assistant's 'research mode' so a spoken question can get the
+    same doc+web-search-backed answer as the text Research Agent, not just
+    whatever GPT already knows."""
+    doc_id_list = [doc_id] if doc_id else []
+    agent = _build_research_graph(user_id, doc_id_list or None)
+    result = agent.invoke({
+        "question": question, "doc_ids": doc_id_list, "user_id": user_id,
+        "doc_context": [], "web_results": [], "answer": "",
+    })
+    return result["answer"]
+
+
 # =====================================================================
 # ADDITIONAL AGENTS — each does a real Semantic Scholar tool call
 # before asking GPT-4o-mini to synthesize.

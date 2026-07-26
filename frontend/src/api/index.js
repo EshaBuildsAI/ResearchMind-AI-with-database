@@ -88,11 +88,12 @@ export const featuresApi = {
 
 // ---------------- Voice ----------------
 export const voiceApi = {
-  ask: (audioBlob, documentId, speakResponse) => {
+  ask: (audioBlob, documentId, speakResponse, researchMode) => {
     const form = new FormData()
     form.append('audio', audioBlob, 'question.webm')
     if (documentId) form.append('document_id', documentId)
     form.append('speak_response', speakResponse ? 'true' : 'false')
+    form.append('research_mode', researchMode ? 'true' : 'false')
     return client.post('/voice/ask', form, { headers: { 'Content-Type': 'multipart/form-data' } })
   },
 }
