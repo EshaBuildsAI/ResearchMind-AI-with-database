@@ -1,10 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-<<<<<<< HEAD
 import { Send, Sparkles, FileSearch, BrainCircuit, AlertCircle, X, Plus, ChevronDown, FileText, Check, UploadCloud, Loader2 } from 'lucide-react'
-=======
-import { Send, Sparkles, FileSearch, BrainCircuit, AlertCircle, X, Plus, ChevronDown, FileText, Check } from 'lucide-react'
->>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
 import ReactMarkdown from 'react-markdown'
 import { chatApi } from '../api'
 import { useDocuments } from '../context/DocumentsContext'
@@ -46,7 +42,6 @@ export default function ChatWindow() {
     setAttachedIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]))
   }
 
-<<<<<<< HEAD
   async function handleUploadNew(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -64,8 +59,6 @@ export default function ChatWindow() {
     }
   }
 
-=======
->>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
   async function handleSend(e) {
     e.preventDefault()
     const question = input.trim()
@@ -92,12 +85,8 @@ export default function ChatWindow() {
 
       {/* Always-visible attach strip — this is how people discover that a
           document is optional: attach one (or several) to ask about them,
-<<<<<<< HEAD
           upload a brand new one right here, or leave it off and ask
           anything, like a normal AI assistant. */}
-=======
-          or leave it off and ask anything, like a normal AI assistant. */}
->>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
       <div className="relative mb-4 flex flex-wrap items-center gap-2" ref={pickerRef}>
         {attachedDocs.map((doc) => (
           <span key={doc.id} className="chip border-teal/30 bg-teal/10 text-teal-bright">
@@ -123,14 +112,7 @@ export default function ChatWindow() {
         {attachedDocs.length === 0 && <span className="text-xs text-ink-faint">or just ask anything below</span>}
 
         {pickerOpen && (
-<<<<<<< HEAD
           <div className="glass-card absolute left-0 top-full z-20 mt-1.5 max-h-64 w-64 overflow-y-auto p-1.5">
-=======
-          <div className="glass-card absolute left-0 top-full z-20 mt-1.5 max-h-56 w-64 overflow-y-auto p-1.5">
-            {readyDocs.length === 0 && (
-              <p className="px-3 py-2 text-xs text-ink-faint">No ready documents yet.</p>
-            )}
->>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
             {readyDocs.map((doc) => (
               <button
                 key={doc.id}
@@ -146,7 +128,6 @@ export default function ChatWindow() {
                 <span className="truncate">{doc.filename}</span>
               </button>
             ))}
-<<<<<<< HEAD
             <div className="my-1.5 border-t border-surface-border" />
             <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.docx,.pptx,.xlsx,.txt" onChange={handleUploadNew} />
             <button
@@ -157,8 +138,6 @@ export default function ChatWindow() {
               {uploading ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
               {uploading ? 'Uploading...' : 'Upload a new document'}
             </button>
-=======
->>>>>>> 534d3e68cf165288c34e4a62b43a2afab8657a38
           </div>
         )}
       </div>
