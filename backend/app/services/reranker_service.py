@@ -12,6 +12,8 @@ same HuggingFace-hub mechanism as the embedding model).
 
 import logging
 
+from app.core.config import settings
+
 logger = logging.getLogger("researchmind")
 
 _model = None
@@ -28,8 +30,12 @@ def _get_model():
 def rerank(question: str, candidates: list) -> list:
     """candidates: list of dicts with at least a 'text' key (as returned by
     vectorstore.query_with_metadata). Returns the same list, re-sorted by a
-    calibrated 0-100 confidence score, replacing the rough similarity score."""
-    if not candidates:
+    calibrated 0-100 confidence score, replacing the rough similarity score.
+
+    Skips entirely (no model load, no RAM spent) when settings.ENABLE_RERANKER
+    is off — Citation Agent still works fine using the plain vector-
+    similarity confidence vectorstore already computed."""
+    if not candidates or not settings.ENABLE_RERANKER:
         return candidates
     try:
         model = _get_model()

@@ -290,9 +290,14 @@ def run_citation_agent(db: Session, user_id: str, doc_ids, question: str, run: A
     try:
         cited_chunks = vectorstore.query_with_metadata(user_id, question, doc_id=doc_id_list)
         # Re-rank with a free local cross-encoder for a more accurate,
-        # calibrated confidence score than raw vector-similarity distance.
+        # calibrated confidence score than raw vector-similarity distance —
+        # only when enabled (it costs ~400-500MB RAM for torch, which can
+        # be too much on a memory-constrained free hosting tier).
         cited_chunks = reranker_service.rerank(question, cited_chunks)
-        add_step(db, run, 0, "retrieve_docs", "Retrieving page-level citations (re-ranked for accuracy)",
+        from app.core.config import settings as _settings
+        retrieve_label = "Retrieving page-level citations (re-ranked for accuracy)" if _settings.ENABLE_RERANKER \
+            else "Retrieving page-level citations"
+        add_step(db, run, 0, "retrieve_docs", retrieve_label,
                  detail={"citations": cited_chunks})
 
         if not cited_chunks:

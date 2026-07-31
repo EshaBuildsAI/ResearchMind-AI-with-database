@@ -75,6 +75,14 @@ class Settings:
     CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "chroma_db")
     CHROMA_COLLECTION_NAME = "researchmind_documents"
 
+    # Citation Agent's cross-encoder re-ranking (better confidence scores)
+    # loads torch + sentence-transformers, which can push a free/hobby
+    # hosting tier's ~1GB RAM limit into an out-of-memory crash. Off by
+    # default; set to "true" once you're on a plan with more RAM. When
+    # off, Citation Agent still works — it just uses the plain vector-
+    # similarity confidence score instead of the re-ranked one.
+    ENABLE_RERANKER = os.getenv("ENABLE_RERANKER", "false").lower() == "true"
+
     # ---------------- Export / memory dirs ----------------
     EXPORT_DIR = os.getenv("EXPORT_DIR", "exports")
     MEMORY_DIR = os.getenv("MEMORY_DIR", "memory")
