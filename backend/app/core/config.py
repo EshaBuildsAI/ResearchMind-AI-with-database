@@ -86,10 +86,15 @@ class Settings:
     # ---------------- Frontend URL (for email links) ----------------
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
-    # ---------------- Email (SMTP — free via your own Gmail/Outlook account,
-    # no third-party paid email API required). If left blank, verification/
-    # reset emails are logged to the console instead of actually sent, so
-    # local dev still works with zero setup. ----------------
+    # ---------------- Email (Resend — HTTPS API, never blocked by hosting
+    # platforms, unlike SMTP which Railway/Render often block outbound).
+    # Free tier: 3,000 emails/month. Get a key at https://resend.com/api-keys
+    # Falls back to SMTP (below) if this isn't set, then to console-logging
+    # if neither is set — so local dev works with zero setup either way. ----------------
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+
+    # ---------------- Email (SMTP — fallback if RESEND_API_KEY isn't set) ----------------
     SMTP_HOST = os.getenv("SMTP_HOST", "")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")

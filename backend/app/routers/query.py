@@ -16,6 +16,7 @@ from app.core.deps import get_current_user
 from app.models import ChatMessage, Document, User
 from app.schemas import ChatMessageOut, ChatRequest, ChatResponse
 from app.services import guardrails, llm_service, rate_limit, usage_service, vectorstore
+from app.utils.text import document_status_error
 from app.services.llm_service import LLMNotConfigured
 
 router = APIRouter(prefix="/query", tags=["query"])
@@ -50,7 +51,7 @@ def chat(payload: ChatRequest, current_user: User = Depends(get_current_user), d
             if not document:
                 raise HTTPException(404, f"Document not found: {doc_id}")
             if document.status != "ready":
-                raise HTTPException(409, f"Document is still {document.status}. Try again once it's ready.")
+                raise HTTPException(409, document_status_error(document))
 
         chunks = vectorstore.query(current_user.id, question, doc_id=doc_ids)
         try:

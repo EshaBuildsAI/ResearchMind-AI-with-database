@@ -1,6 +1,22 @@
 """app/services/prompts.py — centralized prompt templates for every AI feature."""
 
 
+def topic_overview_prompt(topic: str) -> str:
+    """Turns a bare topic into factual 'source material' — the output of
+    this feeds into the SAME summary/quiz/flashcard/etc. prompts below as
+    if it were document text, so every Tool works from a topic alone,
+    not just an uploaded document."""
+    return f"""Write a detailed, factual overview of the topic below, covering key
+concepts, context, important facts, and any relevant history a student or
+researcher would need. Be accurate and thorough (roughly 500-700 words).
+Do not invent specific statistics or citations you're not confident about.
+
+TOPIC:
+{topic}
+
+OVERVIEW:"""
+
+
 def summary_prompt(text: str, length: str = "medium") -> str:
     length_map = {
         "short": "in 3-4 concise bullet points",

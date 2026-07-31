@@ -206,28 +206,33 @@ class AgentRunOut(BaseModel):
 # ---------------- AI Features ----------------
 
 class SummaryRequest(BaseModel):
-    document_id: str
+    document_id: str | None = None
+    topic: str | None = None
     length: str = "medium"  # short | medium | detailed
 
 
 class QuizRequest(BaseModel):
-    document_id: str
+    document_id: str | None = None
+    topic: str | None = None
     num_questions: int = 5
 
 
 class FlashcardRequest(BaseModel):
-    document_id: str
+    document_id: str | None = None
+    topic: str | None = None
     num_cards: int = 10
 
 
 class ProposalRequest(BaseModel):
-    document_id: str
+    document_id: str | None = None
+    topic: str | None = None
     degree_level: str = "BS"
     university: str = ""
 
 
 class PresentationRequest(BaseModel):
-    document_id: str
+    document_id: str | None = None
+    topic: str | None = None
     num_slides: int = 8
 
 

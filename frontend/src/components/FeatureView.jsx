@@ -4,26 +4,25 @@ import { motion } from 'framer-motion'
 import { FileText, HelpCircle, Layers, BookOpen, SearchCode, Presentation as PresentationIcon,
   GraduationCap, AlertCircle, Sparkles, Check, X, RotateCw, Download } from 'lucide-react'
 import { featuresApi } from '../api'
-import { useDocuments } from '../context/DocumentsContext'
 import { getAccessToken } from '../api/client'
 import DocumentPicker from './DocumentPicker'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const TOOL_INFO = {
-  'tool-summary': { title: 'Smart Summary', icon: FileText, desc: 'Get a structured summary of your document.' },
-  'tool-quiz': { title: 'AI Quiz', icon: HelpCircle, desc: 'Test your understanding with auto-generated questions.' },
-  'tool-flashcards': { title: 'Flashcards', icon: Layers, desc: 'Study key concepts and terms.' },
-  'tool-literature': { title: 'Literature Review', icon: BookOpen, desc: 'Auto-generate a literature review section.' },
-  'tool-gap': { title: 'Research Gap Finder', icon: SearchCode, desc: 'Find missing topics, limitations, and future work.' },
-  'tool-presentation': { title: 'Presentation Studio', icon: PresentationIcon, desc: 'Turn your research into a fully designed, downloadable .pptx deck.' },
-  'tool-proposal': { title: 'Proposal Generator', icon: GraduationCap, desc: 'Draft a BS/MS final year research proposal.' },
+  'tool-summary': { title: 'Smart Summary', icon: FileText, desc: 'Get a structured summary — from your document, or just a topic.', placeholder: 'e.g. "Photosynthesis"' },
+  'tool-quiz': { title: 'AI Quiz', icon: HelpCircle, desc: 'Auto-generated questions — from your document, or just a topic.', placeholder: 'e.g. "CNN"' },
+  'tool-flashcards': { title: 'Flashcards', icon: Layers, desc: 'Study key concepts — from your document, or just a topic.', placeholder: 'e.g. "World War 2"' },
+  'tool-literature': { title: 'Literature Review', icon: BookOpen, desc: 'Auto-generate a review section — from your document, or just a topic.', placeholder: 'e.g. "Transformer architectures"' },
+  'tool-gap': { title: 'Research Gap Finder', icon: SearchCode, desc: 'Find missing topics & limitations — from your document, or just a topic.', placeholder: 'e.g. "Reinforcement learning"' },
+  'tool-presentation': { title: 'Presentation Studio', icon: PresentationIcon, desc: 'A fully designed, downloadable .pptx deck — from your document, or just a topic.', placeholder: 'e.g. "Climate change"' },
+  'tool-proposal': { title: 'Proposal Generator', icon: GraduationCap, desc: 'Draft a BS/MS proposal — from your document, or just a topic.', placeholder: 'e.g. "Machine learning in healthcare"' },
 }
 
 export default function FeatureView({ toolId }) {
   const info = TOOL_INFO[toolId]
-  const { selectedId: topbarSelectedId } = useDocuments()
-  const [selectedIds, setSelectedIds] = useState(topbarSelectedId ? [topbarSelectedId] : [])
+  const [selectedIds, setSelectedIds] = useState([])
+  const [topic, setTopic] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
@@ -31,8 +30,8 @@ export default function FeatureView({ toolId }) {
   const documentId = selectedIds[0] || null
 
   async function handleGenerate() {
-    if (!documentId) {
-      setError('Select a document above, or upload a new one.')
+    if (!documentId && !topic.trim()) {
+      setError('Select a document, enter a topic, or both.')
       return
     }
     setError('')
@@ -40,32 +39,33 @@ export default function FeatureView({ toolId }) {
     setResult(null)
     try {
       let data
+      const t = topic.trim() || undefined
       switch (toolId) {
         case 'tool-summary':
-          data = (await featuresApi.summary(documentId, 'medium')).data
+          data = (await featuresApi.summary(documentId, 'medium', t)).data
           break
         case 'tool-quiz':
-          data = (await featuresApi.quiz(documentId, 5)).data
+          data = (await featuresApi.quiz(documentId, 5, t)).data
           break
         case 'tool-flashcards':
-          data = (await featuresApi.flashcards(documentId, 10)).data
+          data = (await featuresApi.flashcards(documentId, 10, t)).data
           break
         case 'tool-literature':
-          data = (await featuresApi.literatureReview(documentId)).data
+          data = (await featuresApi.literatureReview(documentId, t)).data
           break
         case 'tool-gap':
-          data = (await featuresApi.researchGap(documentId)).data
+          data = (await featuresApi.researchGap(documentId, t)).data
           break
         case 'tool-presentation':
-          data = (await featuresApi.presentation(documentId, 8)).data
+          data = (await featuresApi.presentation(documentId, 8, t)).data
           break
         case 'tool-proposal':
-          data = (await featuresApi.proposal(documentId, 'BS', '')).data
+          data = (await featuresApi.proposal(documentId, 'BS', '', t)).data
           break
       }
       setResult(data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Generation failed. Please try again. Make sure the document has finished processing.')
+      setError(err.response?.data?.detail || 'Generation failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -85,7 +85,21 @@ export default function FeatureView({ toolId }) {
 
       {!result && (
         <div className="glass-card space-y-4 p-6">
-          <DocumentPicker selectedIds={selectedIds} onChange={setSelectedIds} multiDoc={false} label="Document" />
+          <DocumentPicker selectedIds={selectedIds} onChange={setSelectedIds} multiDoc={false} label="Document (optional — or upload a new one)" />
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-muted">
+              Topic (optional if a document is selected)
+            </label>
+            <input
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder={info.placeholder}
+              className="input-field"
+            />
+          </div>
+
           <button onClick={handleGenerate} disabled={loading} className="btn-primary mx-auto">
             <Sparkles size={15} />
             {loading ? 'Generating...' : 'Generate'}

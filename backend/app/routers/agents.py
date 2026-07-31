@@ -25,6 +25,7 @@ from app.core.deps import get_current_user
 from app.models import AgentRun, Document, User
 from app.schemas import AgentRequest, AgentRunOut, SummarizeReferenceRequest
 from app.services import agent_service, guardrails, llm_service, rate_limit, usage_service, vectorstore
+from app.utils.text import document_status_error
 from app.services.llm_service import LLMNotConfigured
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -37,7 +38,7 @@ def _validate_document(db: Session, user_id: str, document_id: str | None) -> Do
     if not document:
         raise HTTPException(404, "Document not found.")
     if document.status != "ready":
-        raise HTTPException(409, f"Document is still {document.status}. Try again once it's ready.")
+        raise HTTPException(409, document_status_error(document))
     return document
 
 

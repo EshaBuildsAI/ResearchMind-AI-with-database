@@ -3,6 +3,12 @@ app/routers/features.py
 The standalone AI features (not multi-step agents): Summary, Quiz,
 Flashcards, Literature Review, Research Gap Finder, Presentation outline,
 Proposal Generator, and Smart Memory (read-only view of stored Q&A history).
+
+Every tool accepts a document, a topic, or both — same pattern as the
+agents. When only a topic is given, GPT first writes a factual overview
+of it (generate_topic_overview), and that overview is fed into the exact
+same prompts a document's text would use, so no separate topic-specific
+logic is needed per tool.
 """
 
 import os
@@ -19,21 +25,39 @@ from app.schemas import (
     FlashcardRequest, PresentationRequest, ProposalRequest, QuizRequest, SummaryRequest,
 )
 from app.services import guardrails, llm_service, memory_service, pptx_generator, rate_limit, usage_service, vectorstore
+from app.utils.text import document_status_error
 from app.services.llm_service import LLMNotConfigured
 
 router = APIRouter(prefix="/features", tags=["features"])
 
 
-def _get_ready_document_text(db: Session, user_id: str, document_id: str) -> str:
-    document = db.query(Document).filter(Document.id == document_id, Document.user_id == user_id).first()
-    if not document:
-        raise HTTPException(404, "Document not found.")
-    if document.status != "ready":
-        raise HTTPException(409, f"Document is still {document.status}. Try again once it's ready.")
-    text = vectorstore.get_full_document_text(user_id, document_id)
-    if not text:
-        raise HTTPException(404, "No extracted text found for this document.")
-    return text
+def _get_source_text(db: Session, current_user: User, document_id: str | None, topic: str | None) -> tuple:
+    """Returns (source_text, display_title). Document takes priority if
+    both are given (matches the agents' convention). Raises 400 if
+    genuinely neither was provided."""
+    if document_id:
+        document = db.query(Document).filter(Document.id == document_id, Document.user_id == current_user.id).first()
+        if not document:
+            raise HTTPException(404, "Document not found.")
+        if document.status != "ready":
+            raise HTTPException(409, document_status_error(document))
+        text = vectorstore.get_full_document_text(current_user.id, document_id)
+        if not text:
+            raise HTTPException(404, "No extracted text found for this document.")
+        title = document.filename.rsplit(".", 1)[0].replace("_", " ")
+        return text, title
+
+    topic = (topic or "").strip()
+    if not topic:
+        raise HTTPException(400, "Provide a document, a topic, or both.")
+    is_valid, cleaned_or_error = guardrails.validate_question(topic)
+    if not is_valid:
+        raise HTTPException(400, cleaned_or_error)
+    try:
+        overview = llm_service.generate_topic_overview(cleaned_or_error)
+    except LLMNotConfigured:
+        raise
+    return overview, cleaned_or_error
 
 
 def _run(fn, *args, **kwargs):
@@ -47,7 +71,7 @@ def _run(fn, *args, **kwargs):
 def summary(payload: SummaryRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, _ = _get_source_text(db, current_user, payload.document_id, payload.topic)
     result = _run(llm_service.generate_summary, text, payload.length)
     valid, result_or_error = guardrails.validate_ai_output(result)
     if not valid:
@@ -59,10 +83,10 @@ def summary(payload: SummaryRequest, current_user: User = Depends(get_current_us
 def quiz(payload: QuizRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, _ = _get_source_text(db, current_user, payload.document_id, payload.topic)
     questions = _run(llm_service.generate_quiz, text, payload.num_questions)
     if not questions:
-        raise HTTPException(502, "Couldn't generate a valid quiz from this document. Try again.")
+        raise HTTPException(502, "Couldn't generate a valid quiz. Try again.")
     return {"questions": questions}
 
 
@@ -70,10 +94,10 @@ def quiz(payload: QuizRequest, current_user: User = Depends(get_current_user), d
 def flashcards(payload: FlashcardRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, _ = _get_source_text(db, current_user, payload.document_id, payload.topic)
     cards = _run(llm_service.generate_flashcards, text, payload.num_cards)
     if not cards:
-        raise HTTPException(502, "Couldn't generate flashcards from this document. Try again.")
+        raise HTTPException(502, "Couldn't generate flashcards. Try again.")
     return {"cards": cards}
 
 
@@ -81,7 +105,7 @@ def flashcards(payload: FlashcardRequest, current_user: User = Depends(get_curre
 def literature_review(payload: SummaryRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, _ = _get_source_text(db, current_user, payload.document_id, payload.topic)
     result = _run(llm_service.generate_literature_review, text)
     return {"literature_review": result}
 
@@ -90,7 +114,7 @@ def literature_review(payload: SummaryRequest, current_user: User = Depends(get_
 def research_gap(payload: SummaryRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, _ = _get_source_text(db, current_user, payload.document_id, payload.topic)
     result = _run(llm_service.detect_research_gaps, text)
     return {"research_gaps": result}
 
@@ -99,13 +123,11 @@ def research_gap(payload: SummaryRequest, current_user: User = Depends(get_curre
 def presentation(payload: PresentationRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    document = db.query(Document).filter(Document.id == payload.document_id, Document.user_id == current_user.id).first()
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, deck_title = _get_source_text(db, current_user, payload.document_id, payload.topic)
     slides = _run(llm_service.generate_presentation_outline, text, payload.num_slides)
     if not slides:
-        raise HTTPException(502, "Couldn't generate a presentation outline from this document. Try again.")
+        raise HTTPException(502, "Couldn't generate a presentation outline. Try again.")
 
-    deck_title = (document.filename.rsplit(".", 1)[0] if document else "Presentation").replace("_", " ")
     try:
         file_path = pptx_generator.build_presentation(deck_title, slides)
         file_id = os.path.basename(file_path)
@@ -146,7 +168,7 @@ def download_presentation(file_id: str, request: Request, token: str | None = No
 def proposal(payload: ProposalRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     rate_limit.enforce("features", current_user.id, settings.CHAT_RATE_LIMIT_PER_MINUTE)
     usage_service.enforce_daily_limit(db, current_user, "chat")
-    text = _get_ready_document_text(db, current_user.id, payload.document_id)
+    text, _ = _get_source_text(db, current_user, payload.document_id, payload.topic)
     result = _run(llm_service.generate_proposal, text, payload.degree_level, payload.university)
     return {"proposal": result}
 

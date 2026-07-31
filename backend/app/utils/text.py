@@ -43,5 +43,15 @@ def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
 
 
+def document_status_error(document) -> str:
+    """Used by query/agents/features routers when a document isn't ready
+    yet. Shows the real failure reason instead of the confusing
+    'Document is still failed' message (found via real testing)."""
+    if document.status == "failed":
+        reason = document.error_message or "processing failed for an unknown reason"
+        return f"This document failed to process: {reason}"
+    return f"Document is still {document.status}. Try again once it's ready."
+
+
 def truncate(text: str, max_chars: int = 300) -> str:
     return text if len(text) <= max_chars else text[:max_chars].rstrip() + "..."

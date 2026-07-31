@@ -176,6 +176,11 @@ def delete_document(document_id: str, current_user: User = Depends(get_current_u
 
     vectorstore.delete_document(current_user.id, document_id)
     db.query(ChatMessage).filter(ChatMessage.document_id == document_id).delete()
+    # AgentRun rows referencing this document must go too, or the delete
+    # below fails with a foreign-key violation (found via real testing).
+    from app.models import AgentRun
+    db.query(AgentRun).filter(AgentRun.document_id == document_id).delete()
+    db.commit()
 
     try:
         if os.path.exists(document.storage_path):

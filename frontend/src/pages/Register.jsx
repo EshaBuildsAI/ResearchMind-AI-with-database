@@ -1,8 +1,20 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BrainCircuit, Lock, User, Mail, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react'
+import {
+  BrainCircuit, Lock, User, Mail, ArrowRight, AlertCircle, CheckCircle2,
+  FileText, ListChecks, Layers, SearchCode, Sparkles, GraduationCap,
+} from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+
+const PILLS = [
+  { icon: FileText, label: 'Smart Summary' },
+  { icon: Layers, label: 'Flashcards' },
+  { icon: ListChecks, label: 'Recommendations' },
+  { icon: SearchCode, label: 'Research Gaps' },
+  { icon: Sparkles, label: 'Innovation Ideas' },
+  { icon: GraduationCap, label: 'Proposal Generator' },
+]
 
 export default function Register() {
   const { register } = useAuth()
@@ -33,88 +45,117 @@ export default function Register() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+    <div className="relative min-h-screen overflow-hidden">
       <div className="pointer-events-none absolute -right-32 -top-24 h-96 w-96 rounded-full bg-coral/15 blur-[100px]" />
       <div className="pointer-events-none absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-teal/20 blur-[100px]" />
 
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="glass-card relative w-full max-w-md p-8"
-      >
-        <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-coral to-coral-dark shadow-glow-coral">
-            <BrainCircuit size={24} className="text-void" strokeWidth={2} />
+      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center gap-12 px-6 py-12 lg:flex-row lg:items-center lg:gap-20">
+        {/* Left: product showcase — hidden on small screens to keep mobile focused on the form */}
+        <div className="hidden max-w-lg lg:block">
+          <div className="mb-6 flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-coral to-coral-dark">
+              <BrainCircuit size={18} className="text-void" />
+            </div>
+            <span className="font-display text-sm font-semibold text-ink">ResearchMind AI</span>
           </div>
-          <h1 className="font-display text-xl font-semibold text-ink">Create your workspace</h1>
-          <p className="mt-1 text-sm text-ink-muted">Start analyzing research in minutes</p>
+          <h1 className="font-display text-5xl font-semibold leading-tight text-ink">
+            Read less.
+            <br />
+            Understand more.
+          </h1>
+          <p className="mt-5 max-w-md text-base text-ink-muted">
+            One workspace for every research task — documents, agents, quizzes, and a voice
+            assistant that actually searches the web.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-2">
+            {PILLS.map((p) => (
+              <span key={p.label} className="chip border-surface-border bg-surface-light text-ink-muted">
+                <p.icon size={13} strokeWidth={1.75} /> {p.label}
+              </span>
+            ))}
+          </div>
         </div>
 
-        {success ? (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <CheckCircle2 size={32} className="text-teal-bright" />
-            <p className="text-sm text-ink">Account created. Check your email to verify your account. Redirecting to sign in...</p>
+        {/* Right: register form */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="glass-card relative w-full max-w-md p-8"
+        >
+          <div className="mb-8 flex flex-col items-center text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-coral to-coral-dark shadow-glow-coral">
+              <BrainCircuit size={24} className="text-void" strokeWidth={2} />
+            </div>
+            <h1 className="font-display text-xl font-semibold text-ink">Create your workspace</h1>
+            <p className="mt-1 text-sm text-ink-muted">Start analyzing research in minutes</p>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-              <input
-                type="text"
-                placeholder="Username"
-                value={form.username}
-                onChange={(e) => update('username', e.target.value)}
-                className="input-field pl-10"
-                required
-                autoFocus
-              />
-            </div>
-            <div className="relative">
-              <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-              <input
-                type="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={(e) => update('email', e.target.value)}
-                className="input-field pl-10"
-                required
-              />
-            </div>
-            <div className="relative">
-              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-              <input
-                type="password"
-                placeholder="Password (min. 6 characters)"
-                value={form.password}
-                onChange={(e) => update('password', e.target.value)}
-                className="input-field pl-10"
-                required
-                minLength={6}
-              />
-            </div>
 
-            {error && (
-              <div className="flex items-start gap-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-xs text-coral-glow">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                <span>{error}</span>
+          {success ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <CheckCircle2 size={32} className="text-teal-bright" />
+              <p className="text-sm text-ink">Account created. Check your email to verify your account. Redirecting to sign in...</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="relative">
+                <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={form.username}
+                  onChange={(e) => update('username', e.target.value)}
+                  className="input-field pl-10"
+                  required
+                  autoFocus
+                />
               </div>
-            )}
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={form.email}
+                  onChange={(e) => update('email', e.target.value)}
+                  className="input-field pl-10"
+                  required
+                />
+              </div>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+                <input
+                  type="password"
+                  placeholder="Password (min. 6 characters)"
+                  value={form.password}
+                  onChange={(e) => update('password', e.target.value)}
+                  className="input-field pl-10"
+                  required
+                  minLength={6}
+                />
+              </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Creating account...' : 'Create account'}
-              {!loading && <ArrowRight size={15} />}
-            </button>
-          </form>
-        )}
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-xs text-coral-glow">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-        <p className="mt-6 text-center text-sm text-ink-muted">
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium text-teal-bright hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </motion.div>
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Creating account...' : 'Create account'}
+                {!loading && <ArrowRight size={15} />}
+              </button>
+            </form>
+          )}
+
+          <p className="mt-6 text-center text-sm text-ink-muted">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-teal-bright hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </motion.div>
+      </div>
     </div>
   )
 }

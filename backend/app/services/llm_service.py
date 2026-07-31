@@ -43,6 +43,13 @@ def generate(prompt: str, max_tokens: int = 2048) -> str:
 
 # ---------------- Feature entry points ----------------
 
+def generate_topic_overview(topic: str) -> str:
+    """Turns a bare topic into factual source text, which the caller then
+    feeds into generate_summary/generate_quiz/etc. exactly like document
+    text — this is what lets every Tool work from just a topic."""
+    return generate(prompts.topic_overview_prompt(topic))
+
+
 def generate_summary(text: str, length: str = "medium") -> str:
     return generate(prompts.summary_prompt(text, length))
 

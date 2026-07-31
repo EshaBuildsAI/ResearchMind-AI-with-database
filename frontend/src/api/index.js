@@ -75,14 +75,14 @@ export const agentsApi = {
 
 // ---------------- AI Features ----------------
 export const featuresApi = {
-  summary: (documentId, length) => client.post('/features/summary', { document_id: documentId, length }),
-  quiz: (documentId, numQuestions) => client.post('/features/quiz', { document_id: documentId, num_questions: numQuestions }),
-  flashcards: (documentId, numCards) => client.post('/features/flashcards', { document_id: documentId, num_cards: numCards }),
-  literatureReview: (documentId) => client.post('/features/literature-review', { document_id: documentId }),
-  researchGap: (documentId) => client.post('/features/research-gap', { document_id: documentId }),
-  presentation: (documentId, numSlides) => client.post('/features/presentation', { document_id: documentId, num_slides: numSlides }),
-  proposal: (documentId, degreeLevel, university) =>
-    client.post('/features/proposal', { document_id: documentId, degree_level: degreeLevel, university }),
+  summary: (documentId, length, topic) => client.post('/features/summary', { document_id: documentId, length, topic }),
+  quiz: (documentId, numQuestions, topic) => client.post('/features/quiz', { document_id: documentId, num_questions: numQuestions, topic }),
+  flashcards: (documentId, numCards, topic) => client.post('/features/flashcards', { document_id: documentId, num_cards: numCards, topic }),
+  literatureReview: (documentId, topic) => client.post('/features/literature-review', { document_id: documentId, topic }),
+  researchGap: (documentId, topic) => client.post('/features/research-gap', { document_id: documentId, topic }),
+  presentation: (documentId, numSlides, topic) => client.post('/features/presentation', { document_id: documentId, num_slides: numSlides, topic }),
+  proposal: (documentId, degreeLevel, university, topic) =>
+    client.post('/features/proposal', { document_id: documentId, degree_level: degreeLevel, university, topic }),
   smartMemory: (documentId) => client.get(`/features/smart-memory/${documentId}`),
 }
 

@@ -21,7 +21,11 @@ def _today_key() -> str:
 def get_plan_limits(user: User) -> dict:
     """Read live from settings each call (not baked into a module-level dict
     at import time) so limits can be tuned via env vars without a restart-
-    sensitive caching bug."""
+    sensitive caching bug. Admins get unlimited (None = no cap) regardless
+    of their `plan` field — being an admin shouldn't require also manually
+    setting plan='pro'."""
+    if user.is_admin:
+        return {"documents": None, "chat": None, "agent": None}
     if user.plan == "pro":
         return {
             "documents": settings.PRO_PLAN_MAX_DOCUMENTS,
