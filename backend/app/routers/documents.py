@@ -176,10 +176,20 @@ def delete_document(document_id: str, current_user: User = Depends(get_current_u
 
     vectorstore.delete_document(current_user.id, document_id)
     db.query(ChatMessage).filter(ChatMessage.document_id == document_id).delete()
-    # AgentRun rows referencing this document must go too, or the delete
-    # below fails with a foreign-key violation (found via real testing).
-    from app.models import AgentRun
-    db.query(AgentRun).filter(AgentRun.document_id == document_id).delete()
+    # AgentRun rows referencing this document must go too, or the document
+    # delete below fails with a foreign-key violation. AgentStep rows must
+    # be deleted FIRST — bulk .delete() (used here for AgentRun) doesn't
+    # trigger the ORM-level cascade, only session.delete(obj) does, so
+    # AgentStep would otherwise be left dangling and block the AgentRun
+    # delete with its own foreign-key violation (found via real testing).
+    from app.models import AgentRun, AgentStep, SmartMemoryEntry
+    run_ids = [r.id for r in db.query(AgentRun.id).filter(AgentRun.document_id == document_id).all()]
+    if run_ids:
+        db.query(AgentStep).filter(AgentStep.run_id.in_(run_ids)).delete(synchronize_session=False)
+        db.query(AgentRun).filter(AgentRun.document_id == document_id).delete(synchronize_session=False)
+    # SmartMemoryEntry.document_id is non-nullable — this table also
+    # references documents.id and must be cleared or the delete fails.
+    db.query(SmartMemoryEntry).filter(SmartMemoryEntry.document_id == document_id).delete(synchronize_session=False)
     db.commit()
 
     try:
